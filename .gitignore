@@ -1,0 +1,58 @@
+# Dependencies
+node_modules/
+*/node_modules/
+.pnpm-store/
+
+# Environment Variables & Secrets (Keep .env.example safe)
+.env
+.env.*
+!.env.example
+*.env
+*/.env
+*/.env.*
+!*/.env.example
+.dev.vars
+
+# Production Builds & Output
+dist/
+dist-ssr/
+*/dist/
+build/
+*/build/
+.output/
+*/.output/
+.nitro/
+*/.nitro/
+.wrangler/
+*/.wrangler/
+.vinxi/
+.tanstack/
+*/.tanstack/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor & OS metadata
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary / Cache files
+.eslintcache
+.cache/
+*.tmp
+*.zip
+*.tar.gz
