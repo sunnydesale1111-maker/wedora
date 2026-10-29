@@ -1,0 +1,24 @@
+# Server-specific gitignore
+node_modules/
+dist/
+logs/
+*.log
+npm-debug.log*
+
+# Environment variables & secrets
+.env
+.env.*
+*.env
+!.env.example
+
+# Local SQLite databases
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.sqlite-journal
+
+# Coverage and cache
+coverage/
+.cache/
+*.tsbuildinfo
