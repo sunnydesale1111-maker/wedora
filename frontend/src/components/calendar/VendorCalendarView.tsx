@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { AvailabilityStatus } from '@/types/vendor';
-import { CalendarCheck, CheckCircle2, Clock, CalendarDays } from 'lucide-react';
+import { CalendarCheck, CheckCircle2, Clock, CalendarDays, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Status } from '@/components/dashboard';
+import { getDaySlotStatus } from '@/types/vendorSlot';
 
 interface VendorCalendarViewProps {
   vendorId: string;
@@ -102,23 +103,49 @@ export function VendorCalendarView({
           <CalendarDays className="size-4 text-gold" />
           December 2026 Key Dates Schedule
         </h4>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 text-xs">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-xs">
           {SAMPLE_DATES.map((item) => {
             const effective = currentOverrides[item.date] || (item.date === '2026-12-15' ? 'Available' : 'Available');
+            const slotStatus = getDaySlotStatus(vendorId, item.date, effective);
+
             return (
               <div
                 key={item.date}
-                className="flex items-center justify-between p-3 rounded-xl border bg-secondary/50 hover:border-gold/50 transition cursor-pointer"
+                className="flex flex-col justify-between p-3.5 rounded-xl border bg-secondary/40 hover:border-gold/50 transition cursor-pointer space-y-2.5"
                 onClick={() => {
                   setSelectedDate(item.date);
                   setSelectedStatus(effective);
                 }}
               >
-                <div>
-                  <div className="font-semibold text-navy">{item.date}</div>
-                  <div className="text-[11px] text-muted-foreground">{item.label}</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="font-semibold text-navy">{item.date}</div>
+                    <div className="text-[11px] text-muted-foreground">{item.label}</div>
+                  </div>
+                  <Status s={effective} />
                 </div>
-                <Status s={effective} />
+
+                {/* Slot Status Breakdown */}
+                <div className="pt-2 border-t border-border/60 grid grid-cols-2 gap-1.5 text-[10px]">
+                  <div
+                    className={`p-1.5 rounded-lg border text-center font-medium ${
+                      slotStatus.firstHalfBooked
+                        ? 'bg-destructive/10 text-destructive border-destructive/20'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    }`}
+                  >
+                    1st Half: {slotStatus.firstHalfBooked ? 'Booked' : 'Open'}
+                  </div>
+                  <div
+                    className={`p-1.5 rounded-lg border text-center font-medium ${
+                      slotStatus.secondHalfBooked
+                        ? 'bg-destructive/10 text-destructive border-destructive/20'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    }`}
+                  >
+                    2nd Half: {slotStatus.secondHalfBooked ? 'Booked' : 'Open'}
+                  </div>
+                </div>
               </div>
             );
           })}

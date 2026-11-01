@@ -51,8 +51,8 @@ function GetStarted() {
       setEmail("planner@weddingorchestrator.com");
       setFullName("Aditi Sharma (Lead Planner)");
     } else {
-      setEmail("customer@weddingorchestrator.com");
-      setFullName("Rohan Kulkarni (Groom)");
+      setEmail("rohil@kulkarni.com");
+      setFullName("Rohil Kulkarni (Groom)");
     }
     setPassword("Demo@12345");
     setConfirmPassword("Demo@12345");
@@ -68,8 +68,8 @@ function GetStarted() {
     setStep("auth_form");
   };
 
-  const handleContinueWithDemo = (role: UserRole) => {
-    loginAsRole(role);
+  const handleContinueWithDemo = (role: UserRole, customOption?: any) => {
+    loginAsRole(role, customOption);
     if (role === "VENDOR") {
       navigate({ to: "/vendor" });
     } else if (role === "PLANNER") {
@@ -81,6 +81,21 @@ function GetStarted() {
 
   const handleSubmitForm = (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedRole === "CUSTOMER") {
+      if (email.toLowerCase().includes("aniket")) {
+        loginAsRole("CUSTOMER", "aniket");
+      } else if (email.toLowerCase().includes("rohil") || email.toLowerCase().includes("rohan") || email.toLowerCase().includes("customer@weddingorchestrator")) {
+        loginAsRole("CUSTOMER", "rohil");
+      } else {
+        loginAsRole("CUSTOMER", {
+          name: fullName.trim() || email.split("@")[0],
+          email: email.trim(),
+        });
+      }
+      navigate({ to: "/customer" });
+      return;
+    }
+
     loginAsRole(selectedRole);
     if (selectedRole === "VENDOR") {
       navigate({ to: "/vendor" });
@@ -266,22 +281,44 @@ function GetStarted() {
               </p>
             </div>
 
-            {/* Quick Demo Login Hero Button (PRD Section 3) */}
-            <div className="mb-6 rounded-2xl bg-gold-soft border border-gold/40 p-4 text-center space-y-2">
+            {/* Quick Demo Login Hero Section (Independent Customer Profiles) */}
+            <div className="mb-6 rounded-2xl bg-gold-soft border border-gold/40 p-4 text-center space-y-2.5">
               <div className="text-xs text-navy font-semibold flex items-center justify-center gap-1.5">
                 <Sparkles className="size-4 text-gold" />
-                Instant Demo Access
+                {selectedRole === "CUSTOMER" ? "Choose Customer Profile" : "Instant Demo Access"}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                One-click instant access pre-loaded with demonstration data and permissions.
+                {selectedRole === "CUSTOMER"
+                  ? "Test Rohil's preserved wedding event or experience Aniket's fresh onboarding journey."
+                  : "One-click instant access pre-loaded with demonstration data and permissions."}
               </p>
-              <Button
-                variant="hero"
-                className="w-full text-xs font-medium py-2.5"
-                onClick={() => handleContinueWithDemo(selectedRole)}
-              >
-                Continue with Demo Account ({selectedRole})
-              </Button>
+
+              {selectedRole === "CUSTOMER" ? (
+                <div className="space-y-2 pt-1">
+                  <Button
+                    variant="hero"
+                    className="w-full text-xs font-semibold py-2.5"
+                    onClick={() => handleContinueWithDemo("CUSTOMER", "rohil")}
+                  >
+                    Profile A: Rohil Kulkarni (Preserved Event)
+                  </Button>
+                  <Button
+                    variant="soft"
+                    className="w-full text-xs font-semibold py-2.5 border border-gold/50 hover:bg-gold-soft"
+                    onClick={() => handleContinueWithDemo("CUSTOMER", "aniket")}
+                  >
+                    Profile B: Aniket Tribhavan (Fresh Blank Profile)
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="hero"
+                  className="w-full text-xs font-medium py-2.5"
+                  onClick={() => handleContinueWithDemo(selectedRole)}
+                >
+                  Continue with Demo Account ({selectedRole})
+                </Button>
+              )}
             </div>
 
             <div className="relative my-5">

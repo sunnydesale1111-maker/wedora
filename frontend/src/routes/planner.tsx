@@ -16,6 +16,8 @@ import {
   MapPin,
   ArrowRight,
   Bookmark,
+  Building2,
+  Phone,
 } from "lucide-react";
 import {
   DashboardShell,
@@ -28,11 +30,14 @@ import {
 } from "@/components/dashboard";
 import { Button } from "@/components/ui/button";
 import { AIDiscovery } from "@/components/ai-discovery";
+import { PlannerVendorDirectory } from "@/components/planner/PlannerVendorDirectory";
 import { MyShortlistView } from "@/components/shortlist/MyShortlistView";
 import { useDemoSession } from "@/hooks/useDemoSession";
 import { SimulatedPaymentModal } from "@/components/payments/SimulatedPaymentModal";
 import { EventTimelineView } from "@/components/timeline/EventTimelineView";
 import { Booking } from "@/types/booking";
+import { CreateEventAIModal } from "@/components/planner/CreateEventAIModal";
+import { ALL_LOCALITIES } from "@/utils/localityRegistry";
 
 export const Route = createFileRoute("/planner")({
   head: () => ({
@@ -46,7 +51,7 @@ export const Route = createFileRoute("/planner")({
 
 const nav: NavItem[] = [
   { key: "events", label: "Managed Client Events", icon: Calendar },
-  { key: "discovery", label: "AI Vendor Discovery", icon: Sparkles },
+  { key: "discovery", label: "Vendor Directory", icon: Store },
   { key: "shortlist", label: "My Shortlist", icon: Bookmark },
   { key: "quotations", label: "Quotes & Bookings", icon: Briefcase },
   { key: "payments", label: "Simulated Payments", icon: CreditCard },
@@ -60,6 +65,7 @@ function PlannerPortal() {
     activeEvent,
     activeEventId,
     setActiveEventId,
+    addEvent,
     quotations,
     bookings,
     payments,
@@ -73,12 +79,22 @@ function PlannerPortal() {
   // Payment modal state
   const [payBooking, setPayBooking] = useState<Booking | null>(null);
 
+  // AI Event Creation Modal State
+  const [showAIEventModal, setShowAIEventModal] = useState(false);
+
   // New Event creation modal/state
   const [showNewEventModal, setShowNewEventModal] = useState(false);
+  const [newEventClientName, setNewEventClientName] = useState("");
+  const [newEventClientPhone, setNewEventClientPhone] = useState("+91 98200 11223");
   const [newEventName, setNewEventName] = useState("");
+  const [newEventType, setNewEventType] = useState("Traditional Hindu Wedding & Reception");
   const [newEventCity, setNewEventCity] = useState<"Mumbai" | "Pune">("Pune");
+  const [newEventArea, setNewEventArea] = useState("Baner");
+  const [newEventVenueName, setNewEventVenueName] = useState("");
+  const [newEventVenueAddress, setNewEventVenueAddress] = useState("");
   const [newEventDate, setNewEventDate] = useState("2026-12-28");
   const [newEventGuests, setNewEventGuests] = useState(600);
+  const [newEventBudget, setNewEventBudget] = useState(3000000);
 
   const totalAgreed = bookings.reduce((sum, b) => sum + b.agreedAmount, 0);
   const totalPaid = bookings.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
@@ -99,12 +115,22 @@ function PlannerPortal() {
             title="Managed Client Events"
             subtitle="Coordinate multiple weddings and private celebrations. Select an event to contextualize AI Discovery."
             action={
-              <Button
-                variant="hero"
-                onClick={() => setShowNewEventModal(true)}
-              >
-                <Plus className="size-4 mr-1.5" /> Create New Client Event
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAIEventModal(true)}
+                  className="border-gold text-plum hover:bg-gold-soft font-semibold gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <Sparkles className="size-4 text-gold" /> Create Event with AI
+                </Button>
+                <Button
+                  variant="hero"
+                  onClick={() => setShowNewEventModal(true)}
+                  className="gap-1.5 shadow-2xs cursor-pointer"
+                >
+                  <Plus className="size-4" /> Create New Client Event
+                </Button>
+              </div>
             }
           />
 
@@ -168,15 +194,23 @@ function PlannerPortal() {
                     {e.eventName}
                   </h3>
 
-                  <div className="mt-3 space-y-1.5 text-xs text-muted-foreground flex-1">
-                    <div className="flex items-center gap-1.5">
+                  <div className="mt-3 space-y-2 text-xs text-muted-foreground flex-1">
+                    <div className="flex items-center gap-1.5 font-medium text-navy">
                       <Calendar className="size-3.5 text-gold shrink-0" />
                       <span>{e.eventDate}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="size-3.5 text-gold shrink-0" />
-                      <span>{e.city} ({e.area})</span>
+                    <div className="flex items-start gap-1.5">
+                      <Building2 className="size-3.5 text-gold shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">
+                        {e.venueName ? `${e.venueName} • ${e.area}, ${e.city}` : `${e.area}, ${e.city}`}
+                      </span>
                     </div>
+                    {e.clientName && (
+                      <div className="flex items-center gap-1.5">
+                        <Users className="size-3.5 text-gold shrink-0" />
+                        <span>Client: <strong className="text-navy">{e.clientName}</strong></span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1.5">
                       <Users className="size-3.5 text-gold shrink-0" />
                       <span>{e.guestCount} Guests</span>
@@ -199,7 +233,7 @@ function PlannerPortal() {
                       }}
                       className="font-semibold text-plum hover:text-gold flex items-center gap-1 transition"
                     >
-                      AI Discovery <ArrowRight className="size-3.5" />
+                      Vendor Directory <ArrowRight className="size-3.5" />
                     </button>
                   </div>
                 </div>
@@ -209,34 +243,15 @@ function PlannerPortal() {
         </div>
       )}
 
-      {/* ================= 2. AI VENDOR DISCOVERY (USES ACTIVE EVENT) ================= */}
+      {/* ================= 2. VENDOR DIRECTORY ================= */}
       {tab === "discovery" && (
-        <div className="space-y-6 animate-rise">
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-gold-soft p-3.5 rounded-2xl border border-gold/40 text-xs text-navy">
-            <div>
-              Active Planning Event Context: <strong className="text-plum">{activeEvent.eventName}</strong> ({activeEvent.city}, {activeEvent.eventDate})
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Switch Event:</span>
-              <select
-                value={activeEventId}
-                onChange={(e) => setActiveEventId(e.target.value)}
-                className="rounded-full border bg-card px-3 py-1 text-xs font-semibold text-navy outline-none focus:border-gold"
-              >
-                {events.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.eventName} ({ev.city})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
+        <div className="space-y-4 animate-rise">
           <PageTitle
-            title="AI Vendor Discovery Engine"
-            subtitle="Describe requirements in natural language. The AI translates queries into structured parameters across the 100-vendor catalog."
+            title="Vendor Directory & Collaborator Hub"
+            subtitle="Intelligent AI voice assistant for discovering trusted collaborators, checking calendar availability, swapping unavailable vendors, and forecasting event readiness."
+            className="mb-2"
           />
-          <AIDiscovery eventId={activeEventId} />
+          <PlannerVendorDirectory />
         </div>
       )}
 
@@ -390,74 +405,241 @@ function PlannerPortal() {
         />
       )}
 
-      {/* New Event Modal */}
+      {/* AI Event Creation Assistant Modal */}
+      <CreateEventAIModal
+        isOpen={showAIEventModal}
+        onClose={() => setShowAIEventModal(false)}
+        onEventCreated={(eventPayload) => {
+          const created = addEvent(eventPayload);
+          setActiveEventId(created.id);
+          setTab("discovery");
+        }}
+      />
+
+      {/* Manual New Event Registration Modal */}
       {showNewEventModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-md rounded-3xl bg-card p-6 shadow-float border border-gold/40 relative animate-rise my-8">
-            <h3 className="text-xl font-display text-plum font-semibold mb-2">
-              Create Client Wedding Event
-            </h3>
-            <p className="text-xs text-muted-foreground mb-4">
-              Add a new client event to your planning agency dashboard.
-            </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-xl rounded-3xl bg-card p-6 sm:p-7 shadow-float border border-gold/40 relative animate-rise my-8 max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b">
+              <div>
+                <h3 className="text-xl font-display text-plum font-semibold">
+                  Register Client Wedding Event
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Date and venue details are mandatory as the single source of truth for vendor discovery.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowNewEventModal(false)}
+                className="p-1 rounded-full hover:bg-muted text-muted-foreground"
+              >
+                ✕
+              </button>
+            </div>
+
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                alert(`Demo event "${newEventName || "New Wedding"}" created successfully!`);
+                if (!newEventClientName.trim() || !newEventVenueName.trim() || !newEventDate.trim()) {
+                  alert("Please fill in all mandatory fields: Client Name, Event Date, and Venue Name.");
+                  return;
+                }
+
+                const created = addEvent({
+                  eventName: newEventName.trim() || `${newEventClientName.trim()}'s Wedding Celebration`,
+                  eventType: newEventType,
+                  eventDate: newEventDate,
+                  city: newEventCity,
+                  area: newEventArea,
+                  venueName: newEventVenueName.trim(),
+                  venueAddress: newEventVenueAddress.trim() || `${newEventVenueName.trim()}, ${newEventArea}, ${newEventCity}`,
+                  clientName: newEventClientName.trim(),
+                  clientPhone: newEventClientPhone.trim(),
+                  guestCount: newEventGuests,
+                  estimatedBudget: newEventBudget,
+                  ownerRole: "PLANNER",
+                  ownerName: "Aditi Sharma (Lead Planner)",
+                  description: `Wedding celebration for ${newEventClientName} at ${newEventVenueName}, ${newEventArea}, ${newEventCity}.`,
+                });
+
+                setActiveEventId(created.id);
                 setShowNewEventModal(false);
+                setTab("discovery");
               }}
-              className="space-y-3 text-xs"
+              className="space-y-3.5 text-xs"
             >
-              <div>
-                <label className="block font-medium text-navy mb-1">Event Name:</label>
-                <input
-                  type="text"
-                  required
-                  value={newEventName}
-                  onChange={(e) => setNewEventName(e.target.value)}
-                  placeholder="e.g. Varun & Ananya's Royal Wedding"
-                  className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Client / Couple Name <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newEventClientName}
+                    onChange={(e) => {
+                      setNewEventClientName(e.target.value);
+                      if (!newEventName) {
+                        setNewEventName(`${e.target.value}'s Wedding Celebration`);
+                      }
+                    }}
+                    placeholder="e.g. Varun Kulkarni & Ananya Sen"
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Client Phone <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newEventClientPhone}
+                    onChange={(e) => setNewEventClientPhone(e.target.value)}
+                    placeholder="+91 98200 11223"
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">Event Title:</label>
+                  <input
+                    type="text"
+                    required
+                    value={newEventName}
+                    onChange={(e) => setNewEventName(e.target.value)}
+                    placeholder="e.g. Varun & Ananya Royal Wedding"
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">Event Type:</label>
+                  <select
+                    value={newEventType}
+                    onChange={(e) => setNewEventType(e.target.value)}
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  >
+                    <option value="Traditional Hindu Wedding & Reception">Traditional Hindu Wedding & Reception</option>
+                    <option value="Grand Sangeet & Royal Wedding">Grand Sangeet & Royal Wedding</option>
+                    <option value="Hillside Destination Wedding">Hillside Destination Wedding</option>
+                    <option value="Contemporary Reception & Cocktail">Contemporary Reception & Cocktail</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Destination City <span className="text-rose-500">*</span>:
+                  </label>
+                  <select
+                    value={newEventCity}
+                    onChange={(e) => {
+                      const c = e.target.value as "Mumbai" | "Pune";
+                      setNewEventCity(c);
+                      const defLoc = ALL_LOCALITIES.find((l) => l.city === c);
+                      if (defLoc) setNewEventArea(defLoc.canonicalName);
+                    }}
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  >
+                    <option value="Pune">Pune</option>
+                    <option value="Mumbai">Mumbai</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Locality / Area <span className="text-rose-500">*</span>:
+                  </label>
+                  <select
+                    value={newEventArea}
+                    onChange={(e) => setNewEventArea(e.target.value)}
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  >
+                    {ALL_LOCALITIES.filter((l) => l.city === newEventCity).map((l) => (
+                      <option key={l.canonicalName} value={l.canonicalName}>
+                        {l.canonicalName} ({l.devanagari})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Event Date <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={newEventDate}
+                    onChange={(e) => setNewEventDate(e.target.value)}
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Venue Name <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newEventVenueName}
+                    onChange={(e) => setNewEventVenueName(e.target.value)}
+                    placeholder="e.g. Emerald Meadows Banquets"
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="block font-medium text-navy mb-1">
+                    Complete Venue Address <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newEventVenueAddress}
+                    onChange={(e) => setNewEventVenueAddress(e.target.value)}
+                    placeholder="e.g. Survey No. 45/2, Pancard Club Road, Baner, Pune 411045"
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Guest Count <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="number"
+                    min={50}
+                    required
+                    value={newEventGuests}
+                    onChange={(e) => setNewEventGuests(parseInt(e.target.value, 10) || 500)}
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-navy mb-1">
+                    Estimated Budget (₹) <span className="text-rose-500">*</span>:
+                  </label>
+                  <input
+                    type="number"
+                    step={50000}
+                    required
+                    value={newEventBudget}
+                    onChange={(e) => setNewEventBudget(parseInt(e.target.value, 10) || 2500000)}
+                    className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="block font-medium text-navy mb-1">Destination City:</label>
-                <select
-                  value={newEventCity}
-                  onChange={(e) => setNewEventCity(e.target.value as any)}
-                  className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
-                >
-                  <option value="Pune">Pune</option>
-                  <option value="Mumbai">Mumbai</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block font-medium text-navy mb-1">Event Date:</label>
-                <input
-                  type="date"
-                  value={newEventDate}
-                  onChange={(e) => setNewEventDate(e.target.value)}
-                  className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
-                />
-              </div>
-
-              <div>
-                <label className="block font-medium text-navy mb-1">Guest Count:</label>
-                <input
-                  type="number"
-                  value={newEventGuests}
-                  onChange={(e) => setNewEventGuests(parseInt(e.target.value, 10) || 500)}
-                  className="w-full rounded-xl border bg-background px-3 py-2 outline-none focus:border-gold"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-3">
+              <div className="flex justify-end gap-2 pt-3 border-t">
                 <Button type="button" variant="ghost" onClick={() => setShowNewEventModal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="hero">
-                  Create Event
+                <Button type="submit" variant="hero" className="font-semibold">
+                  Register Client Event
                 </Button>
               </div>
             </form>

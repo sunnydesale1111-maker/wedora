@@ -101,8 +101,12 @@ class ApiClient {
       message: string;
       conversationId?: string;
       eventId?: string;
+      role?: 'CUSTOMER' | 'VENDOR' | 'PLANNER';
+      eventContext?: any;
+      vendorContext?: any;
     }) => this.request('/ai/chat', { method: 'POST', body: JSON.stringify(payload) }),
 
+    getStatus: () => this.request('/ai/status', { method: 'GET' }),
     getConversation: (id: string) => this.request(`/ai/conversations/${id}`, { method: 'GET' }),
     listConversations: () => this.request('/ai/conversations', { method: 'GET' }),
   };

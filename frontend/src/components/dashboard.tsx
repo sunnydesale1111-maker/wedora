@@ -126,7 +126,7 @@ export function DashboardShell({
           </div>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 max-w-full overflow-x-hidden">{children}</main>
       </div>
 
       {/* City Selector Modal */}
@@ -144,13 +144,15 @@ export function PageTitle({
   title,
   subtitle,
   action,
+  className,
 }: {
   title: string;
   subtitle?: string;
   action?: ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className={cn("mb-6 flex flex-wrap items-end justify-between gap-4", className)}>
       <div>
         <h1 className="text-2xl sm:text-3xl font-display text-plum font-semibold">
           {title}

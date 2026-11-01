@@ -17,6 +17,7 @@ import {
   ArrowRight,
   ThumbsUp,
   RotateCcw,
+  Sparkles,
 } from "lucide-react";
 import {
   DashboardShell,
@@ -31,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { useDemoSession } from "@/hooks/useDemoSession";
 import { DEMO_VENDORS } from "@/data/demoVendors";
 import { VendorCalendarView } from "@/components/calendar/VendorCalendarView";
+import { VendorVoiceAssistant } from "@/components/vendor/VendorVoiceAssistant";
 import { Inquiry, Quotation } from "@/types/booking";
 
 export const Route = createFileRoute("/vendor")({
@@ -142,10 +144,26 @@ function VendorPortal() {
 
       {/* ================= 1. BUSINESS OVERVIEW ================= */}
       {tab === "overview" && (
-        <div className="space-y-8 animate-rise">
+        <div className="space-y-6 animate-rise">
+          {/* Prominent Live AI Voice Assistant at Top of Overview */}
+          <VendorVoiceAssistant
+            vendor={vendor}
+            inquiries={vendorInquiries}
+            bookings={vendorBookings}
+            calendarOverrides={calendarOverrides[vendor.id] || {}}
+            onUpdateAvailability={(date, status) => {
+              updateVendorAvailability(vendor.id, date, status);
+            }}
+            onCreateQuotation={(payload) => {
+              return createQuotation(payload);
+            }}
+            onNavigateTab={(targetTab) => setTab(targetTab)}
+          />
+
           <PageTitle
             title="Performance Metrics & Inquiries"
             subtitle="Verified platform event history and upcoming client commitments."
+            className="mb-3"
           />
 
           {/* Quick Metrics Bar: Wedora Performance & Trust (NO Star Ratings, NO AOV) */}

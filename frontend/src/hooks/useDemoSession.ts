@@ -108,35 +108,138 @@ export function useDemoSession() {
     saveStored(STORAGE_KEYS.ACTIVE_EVENT_ID, id);
   }, []);
 
-  const activeEvent = events.find((e) => e.id === activeEventId) || events[0];
+  // Helper to check if an event belongs to the current user
+  const isOwnerOfEvent = useCallback(
+    (event: WeddingEvent, user: UserSession): boolean => {
+      if (user.role === 'PLANNER' || user.role === 'VENDOR') return true;
+
+      const userEmail = (user.email || '').toLowerCase().trim();
+      const eventEmail = (event.clientEmail || '').toLowerCase().trim();
+      const userName = (user.name || '').toLowerCase().trim();
+      const eventOwnerName = (event.ownerName || '').toLowerCase().trim();
+
+      // Rohil Kulkarni check (supports aliases: rohil@kulkarni.com, customer@weddingorchestrator.com, rohan.p@gmail.com)
+      const isUserRohil =
+        userEmail === 'rohil@kulkarni.com' ||
+        userEmail === 'customer@weddingorchestrator.com' ||
+        userEmail === 'rohan.p@gmail.com' ||
+        userName.includes('rohil') ||
+        userName.includes('rohan');
+
+      const isEventRohil =
+        eventEmail === 'rohil@kulkarni.com' ||
+        eventEmail === 'customer@weddingorchestrator.com' ||
+        eventEmail === 'rohan.p@gmail.com' ||
+        eventOwnerName.includes('rohil') ||
+        eventOwnerName.includes('rohan') ||
+        event.id === 'evt-01';
+
+      if (isUserRohil) {
+        return isEventRohil;
+      }
+
+      // For Aniket Tribhavan and any new registered customer:
+      // Strictly match userEmail or explicit ownerName. Never match Rohil's event!
+      if (isEventRohil) return false;
+
+      return (
+        (Boolean(eventEmail) && eventEmail === userEmail) ||
+        (Boolean(eventOwnerName) && eventOwnerName.includes(userName.split(' ')[0]))
+      );
+    },
+    []
+  );
+
+  // Filtered customer events for the logged-in customer
+  const customerEvents = useMemo(() => {
+    if (session.role !== 'CUSTOMER') return events;
+    return events.filter((e) => isOwnerOfEvent(e, session));
+  }, [events, session, isOwnerOfEvent]);
+
+  // Active event resolution:
+  // If user is CUSTOMER:
+  //   - If they have events, active event is their matched event.
+  //   - If they have NO events (Aniket or New Customer), activeEvent is null.
+  // If user is PLANNER:
+  //   - Defaults to events.find(e => e.id === activeEventId) || events[0].
+  const activeEvent = useMemo<WeddingEvent | null>(() => {
+    if (session.role === 'CUSTOMER') {
+      if (customerEvents.length === 0) return null;
+      return customerEvents.find((e) => e.id === activeEventId) || customerEvents[0];
+    }
+    return events.find((e) => e.id === activeEventId) || events[0];
+  }, [session.role, customerEvents, events, activeEventId]);
+
+  const addEvent = useCallback(
+    (eventData: Omit<WeddingEvent, 'id' | 'createdAt'> & { id?: string; createdAt?: string }) => {
+      const newEvent: WeddingEvent = {
+        ...eventData,
+        id: eventData.id || `evt-${Date.now()}`,
+        clientEmail: eventData.clientEmail || (session.role === 'CUSTOMER' ? session.email : undefined),
+        ownerName: eventData.ownerName || session.name,
+        ownerRole: eventData.ownerRole || session.role,
+        createdAt: eventData.createdAt || new Date().toISOString(),
+      };
+      setEvents((prev) => {
+        const next = [newEvent, ...prev];
+        saveStored(STORAGE_KEYS.EVENTS, next);
+        return next;
+      });
+      setActiveEventId(newEvent.id);
+      return newEvent;
+    },
+    [setActiveEventId, session]
+  );
 
   // Role Login helpers
-  const loginAsRole = useCallback((role: UserRole, customVendorId?: string) => {
-    let newSession: UserSession;
-    if (role === 'VENDOR') {
-      const vid = customVendorId || 'pun-cat-01';
-      newSession = {
-        role: 'VENDOR',
-        name: vid === 'pun-cat-01' ? 'Royal Feast Catering' : 'Heritage Rasoi Caterers',
-        email: vid === 'pun-cat-01' ? 'vendor1@royalfeast.com' : 'vendor2@heritagerasoi.com',
-        vendorId: vid,
-      };
-    } else if (role === 'PLANNER') {
-      newSession = {
-        role: 'PLANNER',
-        name: 'Aditi Sharma (Lead Planner)',
-        email: 'planner@weddingorchestrator.com',
-      };
-    } else {
-      newSession = {
-        role: 'CUSTOMER',
-        name: 'Rohan Kulkarni (Groom)',
-        email: 'customer@weddingorchestrator.com',
-      };
-    }
-    setSessionState(newSession);
-    saveStored(STORAGE_KEYS.SESSION, newSession);
-  }, []);
+  const loginAsRole = useCallback(
+    (
+      role: UserRole,
+      customOption?: string | { name: string; email: string; vendorId?: string }
+    ) => {
+      let newSession: UserSession;
+      if (role === 'VENDOR') {
+        const vid = typeof customOption === 'string' ? customOption : customOption?.vendorId || 'pun-cat-01';
+        newSession = {
+          role: 'VENDOR',
+          name: vid === 'pun-cat-01' ? 'Royal Feast Catering' : 'Heritage Rasoi Caterers',
+          email: vid === 'pun-cat-01' ? 'vendor1@royalfeast.com' : 'vendor2@heritagerasoi.com',
+          vendorId: vid,
+        };
+      } else if (role === 'PLANNER') {
+        newSession = {
+          role: 'PLANNER',
+          name: 'Aditi Sharma (Lead Planner)',
+          email: 'planner@weddingorchestrator.com',
+        };
+      } else {
+        // CUSTOMER Role
+        if (typeof customOption === 'object' && customOption.name && customOption.email) {
+          newSession = {
+            role: 'CUSTOMER',
+            name: customOption.name,
+            email: customOption.email,
+          };
+        } else if (customOption === 'aniket' || customOption === 'aniket@tribhavan.com') {
+          newSession = {
+            role: 'CUSTOMER',
+            name: 'Aniket Tribhavan',
+            email: 'aniket@tribhavan.com',
+          };
+        } else {
+          // Rohil Kulkarni (Default Preserved Demo Profile)
+          newSession = {
+            role: 'CUSTOMER',
+            name: 'Rohil Kulkarni (Groom)',
+            email: 'rohil@kulkarni.com',
+          };
+        }
+      }
+      setSessionState(newSession);
+      saveStored(STORAGE_KEYS.SESSION, newSession);
+    },
+    []
+  );
 
   // Update vendor calendar availability (PRD Section 9 & Test H)
   const updateVendorAvailability = useCallback(
@@ -453,9 +556,11 @@ export function useDemoSession() {
     city,
     changeCity,
     events,
+    customerEvents,
     activeEvent,
     activeEventId,
     setActiveEventId,
+    addEvent,
     inquiries,
     quotations,
     bookings,

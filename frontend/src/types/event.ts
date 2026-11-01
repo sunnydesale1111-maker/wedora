@@ -7,9 +7,17 @@ export interface WeddingEvent {
   eventDate: string; // YYYY-MM-DD
   city: City;
   area: string;
+  venueName?: string;
+  venueAddress?: string;
+  venueStatus?: 'FINALIZED' | 'NOT_FINALIZED';
+  isVenueProvisional?: boolean;
+  clientName?: string;
+  clientEmail?: string;
+  clientPhone?: string;
   guestCount: number;
   estimatedBudget: number;
   description?: string;
+  requirements?: string[];
   ownerRole: 'PLANNER' | 'CUSTOMER';
   ownerName: string;
   createdAt: string;

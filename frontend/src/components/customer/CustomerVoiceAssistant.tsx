@@ -1,0 +1,298 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Mic,
+  MicOff,
+  Send,
+  Sparkles,
+  Volume2,
+  VolumeX,
+  Languages,
+  Calendar,
+  MapPin,
+  CheckCircle2,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { VoiceLanguage } from '@/utils/vendorVoiceNlu';
+import {
+  parsePlannerVoiceCommand,
+  ParsedPlannerCommand,
+} from '@/utils/plannerVoiceNlu';
+import { WeddingEvent } from '@/types/event';
+
+interface CustomerVoiceAssistantProps {
+  activeEvent: WeddingEvent;
+  onCommandParsed: (command: ParsedPlannerCommand) => void;
+}
+
+export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
+  activeEvent,
+  onCommandParsed,
+}) => {
+  const [inputText, setInputText] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [detectedLang, setDetectedLang] = useState<VoiceLanguage>('en');
+
+  const isProvisional =
+    activeEvent.venueStatus === 'NOT_FINALIZED' ||
+    Boolean(activeEvent.isVenueProvisional) ||
+    activeEvent.venueName?.toLowerCase().includes('not finalized');
+
+  const initialGreeting = `Hello ${activeEvent.clientName || 'there'}! I am your AI Wedding Vendor Assistant for ${activeEvent.eventName} on ${activeEvent.eventDate} in ${activeEvent.area || activeEvent.city}. Ask me in English, Hindi, or Marathi to discover caterers, photographers, decor, check live date availability, or calculate provisional quotations.${
+    isProvisional ? ' (Venue is not finalized yet: recommendations are provisional).' : ''
+  }`;
+
+  const [lastResponse, setLastResponse] = useState<string>(initialGreeting);
+
+  // Sync greeting when active event parameters change
+  useEffect(() => {
+    setLastResponse(
+      `Ready to help with ${activeEvent.eventName} on ${activeEvent.eventDate} in ${activeEvent.area || activeEvent.city}. Ask me in English, Hindi, or Marathi to discover vendors, check availability, or calculate provisional budgets.`
+    );
+  }, [activeEvent.id, activeEvent.eventName, activeEvent.eventDate, activeEvent.area, activeEvent.city]);
+
+  const recognitionRef = useRef<any>(null);
+
+  // Initialize Web Speech API
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang =
+          detectedLang === 'mr' ? 'mr-IN' : detectedLang === 'hi' ? 'hi-IN' : 'en-IN';
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onerror = () => setIsListening(false);
+
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInputText(transcript);
+          handleExecute(transcript);
+        };
+
+        recognitionRef.current = recognition;
+      }
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+    };
+  }, [detectedLang]);
+
+  // Text-to-speech
+  const speakText = (text: string, lang: VoiceLanguage) => {
+    if (!speechEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang === 'mr' ? 'mr-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN';
+    utterance.rate = 1.0;
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      try {
+        recognitionRef.current?.stop();
+      } catch {}
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current?.start();
+      } catch (err) {
+        console.warn('Speech recognition start failed:', err);
+      }
+    }
+  };
+
+  const handleExecute = (textToRun?: string) => {
+    const text = (textToRun !== undefined ? textToRun : inputText).trim();
+    if (!text) return;
+
+    const parsed = parsePlannerVoiceCommand(text, {
+      activeCity: activeEvent.city as any,
+      activeArea: activeEvent.area,
+      activeEventDate: activeEvent.eventDate,
+      activeEventName: activeEvent.eventName,
+    });
+
+    setDetectedLang(parsed.detectedLang);
+    setLastResponse(parsed.assistantSpeechResponse);
+    speakText(parsed.assistantSpeechResponse, parsed.detectedLang);
+
+    onCommandParsed(parsed);
+    setInputText('');
+  };
+
+  const getLanguageLabel = (lang: VoiceLanguage) => {
+    switch (lang) {
+      case 'mr':
+        return 'मराठी (Marathi)';
+      case 'hi':
+        return 'हिन्दी (Hindi)';
+      default:
+        return 'English';
+    }
+  };
+
+  const promptChips = [
+    {
+      label: `Top caterers in ${activeEvent.area || activeEvent.city}`,
+      text: `Show me top rated caterers in ${activeEvent.area || activeEvent.city}`,
+    },
+    {
+      label: `Photographers available on ${activeEvent.eventDate}`,
+      text: `Find photographers available on ${activeEvent.eventDate} in ${activeEvent.city}`,
+    },
+    {
+      label: 'Decorators & banquet halls',
+      text: `Show wedding decorators and banquet halls in ${activeEvent.area || activeEvent.city}`,
+    },
+    {
+      label: 'कॅटरर्स आणि सजावट (Marathi)',
+      text: `${activeEvent.city} मधील कॅटरर्स आणि सजावट वेंडर्स दाखवा`,
+    },
+    {
+      label: 'फोटोग्राफर उपलब्धता (Hindi)',
+      text: `${activeEvent.eventDate} के लिए फोटोग्राफर उपलब्ध हैं क्या?`,
+    },
+  ];
+
+  return (
+    <div className="rounded-3xl border border-gold/30 bg-gradient-to-br from-card via-card to-gold-soft/20 p-5 sm:p-6 shadow-soft space-y-4 animate-rise min-w-0 max-w-full">
+      {/* Header Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-2xl bg-gold/15 text-gold">
+            <Sparkles className="size-5" />
+          </div>
+          <div>
+            <h3 className="font-display font-bold text-plum text-base sm:text-lg flex items-center gap-2">
+              Customer AI Voice Assistant
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gold bg-gold/15 px-2 py-0.5 rounded-full">
+                Multilingual
+              </span>
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              Event Context:{' '}
+              <strong className="text-navy">{activeEvent.eventName}</strong> ({activeEvent.city}, {activeEvent.eventDate}
+              {activeEvent.area ? ` · ${activeEvent.area}` : ''})
+            </p>
+          </div>
+        </div>
+
+        {/* Auto Language Detection Badge & Audio Mute Toggle */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary/80 border text-xs font-medium text-navy">
+            <Languages className="size-3.5 text-gold" />
+            <span>Auto: {getLanguageLabel(detectedLang)}</span>
+          </div>
+          <button
+            onClick={() => setSpeechEnabled(!speechEnabled)}
+            className="p-2 rounded-full border bg-secondary/80 text-muted-foreground hover:text-navy transition"
+            title={speechEnabled ? 'Mute AI voice output' : 'Enable AI voice output'}
+          >
+            {speechEnabled ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Assistant Response Bubble */}
+      <div className="rounded-2xl bg-gold-soft/40 border border-gold/30 p-4 transition-all">
+        <div className="flex items-start gap-3">
+          <div className="size-2 rounded-full bg-gold mt-1.5 shrink-0 animate-pulse" />
+          <div className="flex-1 space-y-1">
+            <p className="text-xs sm:text-sm font-medium text-plum leading-relaxed">
+              {lastResponse}
+            </p>
+            {isSpeaking && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-gold font-semibold">
+                <Volume2 className="size-3 animate-bounce" /> Speaking response...
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Suggested Quick Prompt Chips */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0 mr-1">
+          Try asking:
+        </span>
+        {promptChips.map((chip, idx) => (
+          <button
+            key={idx}
+            onClick={() => {
+              setInputText(chip.text);
+              handleExecute(chip.text);
+            }}
+            className="shrink-0 px-2.5 py-1 rounded-full bg-secondary hover:bg-gold-soft/60 hover:text-navy border border-border text-[11px] font-medium transition text-muted-foreground"
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
+      {/* WhatsApp-style Input Bar */}
+      <div className="flex items-center gap-2 bg-card rounded-2xl border border-gold/40 p-1.5 shadow-sm focus-within:ring-2 focus-within:ring-gold/40">
+        <input
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleExecute();
+          }}
+          placeholder="Speak or type: 'Top caterers in Baner', 'Photographers available on 15 Dec', etc."
+          className="flex-1 bg-transparent px-3 py-2 text-xs sm:text-sm outline-none placeholder:text-muted-foreground"
+        />
+
+        {/* Microphone Button */}
+        <Button
+          type="button"
+          size="sm"
+          variant={isListening ? 'gold' : 'soft'}
+          onClick={toggleListening}
+          className={`rounded-xl px-3 transition ${
+            isListening ? 'animate-pulse bg-gold text-plum font-semibold' : ''
+          }`}
+          title={isListening ? 'Stop listening' : 'Start speaking'}
+        >
+          {isListening ? <MicOff className="size-4" /> : <Mic className="size-4" />}
+          <span className="hidden sm:inline text-xs ml-1.5">
+            {isListening ? 'Listening...' : 'Voice'}
+          </span>
+        </Button>
+
+        {/* Send Button */}
+        <Button
+          type="button"
+          size="sm"
+          variant="hero"
+          onClick={() => handleExecute()}
+          disabled={!inputText.trim()}
+          className="rounded-xl px-3 text-xs"
+        >
+          <Send className="size-3.5" />
+          <span className="hidden sm:inline ml-1.5">Ask</span>
+        </Button>
+      </div>
+    </div>
+  );
+};
+

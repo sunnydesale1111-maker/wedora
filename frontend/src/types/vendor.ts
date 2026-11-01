@@ -126,6 +126,8 @@ export interface Vendor {
   profileCreatedAt?: string;
   isActive?: boolean;
   isDemoData?: boolean;
+  isNearbyCoverage?: boolean;
+  nearbyCoverageNote?: string;
 }
 
 export interface SearchFilters {

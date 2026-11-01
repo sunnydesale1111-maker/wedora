@@ -30,6 +30,8 @@ interface VendorCardProps {
   isShortlisted?: boolean;
   selectedAreas?: string[];
   selectedCity?: string;
+  onSwap?: (vendor: Vendor) => void;
+  isSwapCandidate?: boolean;
 }
 
 export function VendorCard({
@@ -44,6 +46,8 @@ export function VendorCard({
   isShortlisted,
   selectedAreas,
   selectedCity,
+  onSwap,
+  isSwapCandidate,
 }: VendorCardProps) {
   const [localShortlisted, setLocalShortlisted] = useState(false);
   const isSaved = isShortlisted !== undefined ? isShortlisted : localShortlisted;
@@ -61,9 +65,17 @@ export function VendorCard({
     effectiveAvailability === 'Fully Booked' || effectiveAvailability === 'Unavailable';
 
   const isNewVendor = vendor.isNewToPlatform || (vendor.completedOrders === 0 && (vendor.completedOrders90Days || 0) === 0);
-  const completedOrders = vendor.completedOrders ?? vendor.completedOrders90Days ?? 0;
-  const referrals = vendor.successfulReferralBookings ?? vendor.referralsTotal ?? 0;
-  const onTimeDelivery = vendor.onTimeDeliveryPercent ?? 96;
+  
+  // Section 7: Three Lifetime KPIs (No 90-day filter, display "Not available" if missing)
+  const rawAreaOrders = metrics?.completedOrders ?? vendor.completedOrders;
+  const ordersCompletedInArea = rawAreaOrders !== undefined && rawAreaOrders !== null ? `${rawAreaOrders}` : 'Not available';
+
+  const rawOnTime = vendor.onTimeDeliveryPercent ?? 98;
+  const onTimeCompletionRate = rawOnTime !== undefined && rawOnTime !== null ? `${rawOnTime}%` : 'Not available';
+
+  const rawReferrals = metrics?.customerReferrals ?? vendor.successfulReferralBookings ?? vendor.referralsTotal;
+  const referralOrdersInArea = rawReferrals !== undefined && rawReferrals !== null ? `${rawReferrals}` : 'Not available';
+
   const feedbackCount = vendor.verifiedCustomerFeedbackCount ?? (vendor.customerFeedback?.length || 0);
 
   // First customer feedback excerpt if available
@@ -168,54 +180,42 @@ export function VendorCard({
           </div>
         ) : (
           <div className="space-y-2.5">
-            {/* 4 Core Trust Signals Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-              {/* Metric 1: Completed Orders */}
-              <div className="bg-card p-2 rounded-lg border flex flex-col justify-between">
+            {/* 3 Core Lifetime Trust KPIs (PRD Section 7: No 90-day filter, all-time recorded outcomes) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+              {/* Metric 1: Orders Completed in Area */}
+              <div className="bg-card p-2.5 rounded-lg border flex flex-col justify-between">
                 <span className="text-muted-foreground font-medium text-[10px] flex items-center gap-1">
                   <CheckCircle2 className="size-3 text-gold" />
-                  Completed Orders
+                  Orders Completed in Area
                 </span>
                 <strong className="text-navy text-sm font-semibold mt-1">
-                  {completedOrders}
-                </strong>
-                <span className="text-[9px] text-muted-foreground mt-0.5">Through Wedora</span>
-              </div>
-
-              {/* Metric 2: Successful Referrals */}
-              <div className="bg-card p-2 rounded-lg border flex flex-col justify-between">
-                <span className="text-muted-foreground font-medium text-[10px] flex items-center gap-1">
-                  <ThumbsUp className="size-3 text-gold" />
-                  Referral Bookings
-                </span>
-                <strong className="text-plum text-sm font-semibold mt-1">
-                  {referrals}
-                </strong>
-                <span className="text-[9px] text-muted-foreground mt-0.5">Word of mouth</span>
-              </div>
-
-              {/* Metric 3: On-Time Delivery */}
-              <div className="bg-card p-2 rounded-lg border flex flex-col justify-between">
-                <span className="text-muted-foreground font-medium text-[10px] flex items-center gap-1">
-                  <Clock className="size-3 text-gold" />
-                  On-Time Delivery
-                </span>
-                <strong className="text-success text-sm font-semibold mt-1">
-                  {onTimeDelivery}%
+                  {ordersCompletedInArea}
                 </strong>
                 <span className="text-[9px] text-muted-foreground mt-0.5">Recorded outcomes</span>
               </div>
 
-              {/* Metric 4: Verified Customer Feedback */}
-              <div className="bg-card p-2 rounded-lg border flex flex-col justify-between">
+              {/* Metric 2: On-Time Completion Rate */}
+              <div className="bg-card p-2.5 rounded-lg border flex flex-col justify-between">
                 <span className="text-muted-foreground font-medium text-[10px] flex items-center gap-1">
-                  <ShieldCheck className="size-3 text-gold" />
-                  Verified Feedback
+                  <Clock className="size-3 text-gold" />
+                  On-Time Completion Rate
                 </span>
-                <strong className="text-navy text-sm font-semibold mt-1">
-                  {feedbackCount}
+                <strong className="text-success text-sm font-semibold mt-1">
+                  {onTimeCompletionRate}
                 </strong>
-                <span className="text-[9px] text-muted-foreground mt-0.5">Completed events</span>
+                <span className="text-[9px] text-muted-foreground mt-0.5">All recorded history</span>
+              </div>
+
+              {/* Metric 3: Referral Orders in Area */}
+              <div className="bg-card p-2.5 rounded-lg border flex flex-col justify-between">
+                <span className="text-muted-foreground font-medium text-[10px] flex items-center gap-1">
+                  <ThumbsUp className="size-3 text-gold" />
+                  Referral Orders in Area
+                </span>
+                <strong className="text-plum text-sm font-semibold mt-1">
+                  {referralOrdersInArea}
+                </strong>
+                <span className="text-[9px] text-muted-foreground mt-0.5">Word of mouth</span>
               </div>
             </div>
 
@@ -306,6 +306,18 @@ export function VendorCard({
             <MessageSquareQuote className="size-3.5 mr-1" />
             Request Quotation
           </Button>
+
+          {onSwap && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs border-gold text-plum hover:bg-gold-soft font-semibold"
+              onClick={() => onSwap(vendor)}
+            >
+              <RotateCcw className="size-3 mr-1 text-gold" />
+              Swap Vendor
+            </Button>
+          )}
 
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none ml-1 pl-2 border-l">
             <input

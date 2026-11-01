@@ -1,45 +1,33 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import {
   CalendarDays,
   MapPin,
-  Send,
   Sparkles,
   Users,
   Utensils,
-  RefreshCw,
-  RotateCcw,
-  CheckCircle2,
-  Clock,
-  Briefcase,
   X,
-  Edit2,
   Search,
   Check,
   SlidersHorizontal,
   Bookmark,
   DollarSign,
   Heart,
+  Layers,
+  ArrowRight,
+  ShieldCheck,
+  CheckCircle2,
+  Clock,
+  Briefcase,
+  Store,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useDemoSession } from '@/hooks/useDemoSession';
 import { DEMO_VENDORS } from '@/data/demoVendors';
 import { Vendor, VendorCategory, City, AvailabilityStatus, VendorSortOption } from '@/types/vendor';
 import {
-  parseSearchIntent,
   MUMBAI_LOCALITIES,
   PUNE_LOCALITIES,
-  OPENING_MESSAGE,
-  QUESTION_1_EVENT,
-  QUESTION_2_LOCATION,
-  QUESTION_3_CATEGORY,
-  QUESTION_4_BUDGET,
-  QUESTION_5_DATE,
-  FINAL_MESSAGE_MATCHES,
-  FINAL_MESSAGE_NO_MATCHES,
-  FRIENDLY_EMPTY_STATE,
-  SUGGESTIONS_Q1,
-  SUGGESTIONS_COMPLETED,
-  isRequirementsComplete,
 } from '@/utils/searchIntentParser';
 import { filterVendors, getEffectiveAvailability } from '@/utils/vendorFilters';
 import { isOrganizerCategory } from '@/types/shortlist';
@@ -48,28 +36,63 @@ import { VendorProfileModal } from '@/components/vendors/VendorProfileModal';
 import { VendorComparisonModal } from '@/components/vendors/VendorComparisonModal';
 import { RequestQuotationModal } from '@/components/bookings/RequestQuotationModal';
 
-interface Msg {
-  id: string;
-  from: 'ai' | 'me';
-  text: string;
-  timestamp: string;
+export interface VendorBundleItem {
+  category: string;
+  vendor: Vendor;
+  matchReason?: string;
 }
 
-const INITIAL_MESSAGE: Msg = {
-  id: 'm-initial',
-  from: 'ai',
-  text: OPENING_MESSAGE,
-  timestamp: 'Just now',
-};
-
-interface AIDiscoveryProps {
+export interface AIDiscoveryProps {
   eventId?: string;
   initialCategory?: string;
+  role?: 'CUSTOMER' | 'VENDOR' | 'PLANNER';
+  vendorContext?: any;
+  onlyOrganizers?: boolean;
 }
 
 type ActiveEditModal = 'NONE' | 'DATE' | 'LOCATION' | 'GUESTS' | 'CATEGORY';
 
-export function AIDiscovery({ eventId, initialCategory }: AIDiscoveryProps) {
+export const KEY_DATES = [
+  { label: '15 Dec 2026 (Peak Wedding Auspicious Muhurat)', date: '2026-12-15' },
+  { label: '20 Dec 2026 (Winter Weekend)', date: '2026-12-20' },
+  { label: '28 Dec 2026 (Year-End Festive Season)', date: '2026-12-28' },
+  { label: '14 Jan 2027 (Makar Sankranti Auspicious)', date: '2027-01-14' },
+];
+
+export const GUEST_PRESETS = [
+  { label: 'Intimate (100–250 guests)', val: 200 },
+  { label: 'Medium (300–500 guests)', val: 500 },
+  { label: 'Grand (600–800 guests)', val: 750 },
+  { label: 'Royal (1,000+ guests)', val: 1200 },
+];
+
+export const ALL_CATEGORIES = [
+  'Catering and Food Services',
+  'Venues and Banquet Spaces',
+  'Photography and Cinematography',
+  'Floral and Event Decor',
+  'Sound, Lighting and DJ',
+  'Makeup, Hair and Styling',
+  'Bridal and Groom Wear',
+  'Invitations and Stationery',
+  'Entertainment and Performers',
+  'Transportation and Logistics',
+  'Event Organizers / Wedding Planners',
+  'End-to-End Event Management',
+];
+
+export const ORGANIZER_CATEGORIES = [
+  'Event Organizers / Wedding Planners',
+  'End-to-End Event Management',
+];
+
+export function AIDiscovery({
+  eventId,
+  initialCategory,
+  role = 'CUSTOMER',
+  vendorContext,
+  onlyOrganizers = false,
+}: AIDiscoveryProps) {
   const {
     city,
     changeCity,
@@ -79,91 +102,28 @@ export function AIDiscovery({ eventId, initialCategory }: AIDiscoveryProps) {
     shortlist,
     isShortlisted,
     toggleShortlist,
-    removeFromShortlist,
   } = useDemoSession();
-
-  // Mobile active tab (chat vs results)
-  const [mobileTab, setMobileTab] = useState<'chat' | 'results'>('chat');
 
   const effectiveEventId = eventId || activeEvent?.id || 'evt-01';
 
-  // Read saved event context for returning users (PRD Section 5)
-  const savedContext = useMemo(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const raw = localStorage.getItem(`wedora_completed_discovery_${effectiveEventId}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (isRequirementsComplete(parsed)) {
-          return parsed;
-        }
-      }
-    } catch {}
-    return null;
-  }, [effectiveEventId]);
+  // Vendor Bundle & Swap state for Professional Organizer (PRD Section 8)
+  const [vendorBundle, setVendorBundle] = useState<VendorBundleItem[] | null>(null);
+  const [swappingCategory, setSwappingCategory] = useState<string | null>(null);
 
-  // Shared Search & Event Context State
-  const [activeOccasion, setActiveOccasion] = useState<string>(() => savedContext?.occasion || '');
-  const [activeCategory, setActiveCategory] = useState<string>(
-    () => savedContext?.category || initialCategory || ''
+  // Search & Filter State
+  const [activeCity, setActiveCity] = useState<City>(() => (city as City) || 'Pune');
+  const [activeAreas, setActiveAreas] = useState<string[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>(() =>
+    onlyOrganizers
+      ? 'All Event Planners'
+      : initialCategory || 'All Categories'
   );
-  const [activeCategories, setActiveCategories] = useState<string[]>(
-    () => savedContext?.categories || (initialCategory ? [initialCategory] : [])
-  );
-  const [activeCity, setActiveCity] = useState<City>(() => (savedContext?.city as City) || city || 'Pune');
-  const [activeAreas, setActiveAreas] = useState<string[]>(() => savedContext?.areas || []);
-  const [activeDate, setActiveDate] = useState<string>(() => savedContext?.date || '');
-  const [isDateNotFinalized, setIsDateNotFinalized] = useState<boolean>(
-    () => Boolean(savedContext?.isDateNotFinalized)
-  );
-  const [activeGuests, setActiveGuests] = useState<number>(() => savedContext?.guestCount || 500);
-  const [minOrders, setMinOrders] = useState<number | undefined>(undefined);
-  const [maxBudget, setMaxBudget] = useState<number | undefined>(() => savedContext?.budget);
-  const [activeBudgetText, setActiveBudgetText] = useState<string>(() => savedContext?.budgetText || '');
+  const [activeDate, setActiveDate] = useState<string>('2026-12-15');
+  const [isDateNotFinalized, setIsDateNotFinalized] = useState<boolean>(false);
+  const [activeGuests, setActiveGuests] = useState<number>(500);
+  const [maxBudget, setMaxBudget] = useState<number | undefined>(undefined);
   const [sortBy, setSortBy] = useState<VendorSortOption>('recommended');
-
-  // Progressive 5-Question Tracking
-  const [hasAnsweredOccasion, setHasAnsweredOccasion] = useState<boolean>(() => Boolean(savedContext));
-  const [hasAnsweredLocation, setHasAnsweredLocation] = useState<boolean>(() => Boolean(savedContext));
-  const [hasAnsweredCategory, setHasAnsweredCategory] = useState<boolean>(() => Boolean(savedContext));
-  const [hasAnsweredBudget, setHasAnsweredBudget] = useState<boolean>(() => Boolean(savedContext));
-  const [hasAnsweredDate, setHasAnsweredDate] = useState<boolean>(() => Boolean(savedContext));
-  const [isFlowCompleted, setIsFlowCompleted] = useState<boolean>(() => Boolean(savedContext));
-  const [currentSuggestions, setCurrentSuggestions] = useState<string[]>(() =>
-    savedContext ? SUGGESTIONS_COMPLETED : SUGGESTIONS_Q1
-  );
-
-  // Real LLM Status vs Deterministic Demo Fallback (PRD Version 4.0 Section 3.1)
-  const [llmStatus, setLlmStatus] = useState<{
-    isConfigured: boolean;
-    provider: string;
-    mode: string;
-  }>({
-    isConfigured: false,
-    provider: 'Google Gemini (gemini-1.5-flash)',
-    mode: 'DEMO_FALLBACK',
-  });
-
-  useEffect(() => {
-    fetch('http://localhost:5001/api/ai/status')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setLlmStatus({
-            isConfigured: data.isConfigured,
-            provider: data.provider,
-            mode: data.mode,
-          });
-        }
-      })
-      .catch(() => {
-        setLlmStatus({
-          isConfigured: false,
-          provider: 'Google Gemini (gemini-1.5-flash)',
-          mode: 'DEMO_FALLBACK',
-        });
-      });
-  }, []);
+  const [searchTerm, setSearchTerm] = useState<string>('');
 
   // Modals state
   const [activeEditModal, setActiveEditModal] = useState<ActiveEditModal>('NONE');
@@ -174,16 +134,6 @@ export function AIDiscovery({ eventId, initialCategory }: AIDiscoveryProps) {
   const [tempGuests, setTempGuests] = useState<number>(activeGuests);
   const [tempCategory, setTempCategory] = useState<string>(activeCategory);
 
-  // Chat conversation state
-  const [messages, setMessages] = useState<Msg[]>(() =>
-    savedContext
-      ? [{ id: 'm-restored', from: 'ai', text: FINAL_MESSAGE_MATCHES, timestamp: 'Just now' }]
-      : [INITIAL_MESSAGE]
-  );
-  const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const chatScrollRef = useRef<HTMLDivElement>(null);
-
   // Modals for Vendor details & comparison
   const [profileVendor, setProfileVendor] = useState<Vendor | null>(null);
   const [quoteVendor, setQuoteVendor] = useState<Vendor | null>(null);
@@ -193,508 +143,85 @@ export function AIDiscovery({ eventId, initialCategory }: AIDiscoveryProps) {
   // Today's date boundary
   const todayStr = '2026-10-23';
 
-  // Restore or reset context whenever effective event ID changes
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const raw = localStorage.getItem(`wedora_completed_discovery_${effectiveEventId}`);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (isRequirementsComplete(parsed)) {
-          setActiveOccasion(parsed.occasion || '');
-          setActiveCity((parsed.city as City) || 'Pune');
-          setActiveAreas(parsed.areas || []);
-          setActiveCategory(parsed.category || '');
-          setActiveCategories(parsed.categories || (parsed.category ? [parsed.category] : []));
-          setActiveDate(parsed.date || '');
-          setIsDateNotFinalized(Boolean(parsed.isDateNotFinalized));
-          setMaxBudget(parsed.budget);
-          setActiveBudgetText(parsed.budgetText || '');
-          setHasAnsweredOccasion(true);
-          setHasAnsweredLocation(true);
-          setHasAnsweredCategory(true);
-          setHasAnsweredBudget(true);
-          setHasAnsweredDate(true);
-          setIsFlowCompleted(true);
-          setCurrentSuggestions(SUGGESTIONS_COMPLETED);
-          setMessages([
-            { id: 'm-restored', from: 'ai', text: FINAL_MESSAGE_MATCHES, timestamp: 'Just now' },
-          ]);
-          return;
-        }
-      }
-    } catch {}
-
-    // Incomplete or new event: start fresh 5-question questionnaire
-    setActiveOccasion('');
-    setActiveAreas([]);
-    setActiveCategory(initialCategory || '');
-    setActiveCategories(initialCategory ? [initialCategory] : []);
-    setActiveDate('');
-    setIsDateNotFinalized(false);
-    setMaxBudget(undefined);
-    setActiveBudgetText('');
-    setHasAnsweredOccasion(false);
-    setHasAnsweredLocation(false);
-    setHasAnsweredCategory(false);
-    setHasAnsweredBudget(false);
-    setHasAnsweredDate(false);
-    setIsFlowCompleted(false);
-    setCurrentSuggestions(SUGGESTIONS_Q1);
-    setMessages([INITIAL_MESSAGE]);
-  }, [effectiveEventId]);
-
-  // Sync initialCategory when passed from outside
-  useEffect(() => {
-    if (initialCategory && !savedContext) {
-      setActiveCategory(initialCategory);
-      setActiveCategories([initialCategory]);
+  // Base list of vendors: if onlyOrganizers is true, STRICTLY filter out all non-planners
+  const baseVendors = useMemo(() => {
+    if (onlyOrganizers) {
+      return DEMO_VENDORS.filter((v) => isOrganizerCategory(v.category));
     }
-  }, [initialCategory, savedContext]);
+    return DEMO_VENDORS;
+  }, [onlyOrganizers]);
 
-  // Sync with global city changes
-  useEffect(() => {
-    if (city && city !== activeCity && !savedContext) {
-      setActiveCity(city);
-      setActiveAreas([]);
+  // Available category chips
+  const categoryChips = useMemo(() => {
+    if (onlyOrganizers) {
+      return ['All Event Planners', ...ORGANIZER_CATEGORIES];
     }
-  }, [city, savedContext]);
+    return ['All Categories', ...ALL_CATEGORIES];
+  }, [onlyOrganizers]);
 
-  // CRITICAL RULE (Section 3): Vendor recommendations must appear ONLY after all five questions are answered.
-  // When isFlowCompleted is false, searchResults returns 0 matches so no partial or loading cards are shown.
+  // Search Results computation
   const searchResults = useMemo(() => {
-    if (!isFlowCompleted) {
-      return { results: [], totalMatched: 0, criteriaApplied: [] };
+    let effectiveCategory: string | undefined = undefined;
+    if (onlyOrganizers) {
+      if (activeCategory === 'Event Organizers / Wedding Planners' || activeCategory === 'End-to-End Event Management') {
+        effectiveCategory = activeCategory;
+      }
+    } else if (activeCategory && activeCategory !== 'All Categories') {
+      effectiveCategory = activeCategory;
     }
-    return filterVendors(
+
+    const filtered = filterVendors(
       {
-        category: activeCategory,
-        categories: activeCategories,
+        category: effectiveCategory,
         city: activeCity,
         areas: activeAreas.length > 0 ? activeAreas : undefined,
         date: isDateNotFinalized ? undefined : activeDate || undefined,
         guestCount: activeGuests,
-        minOrders,
         maxBudget,
         sortBy,
       },
       calendarOverrides,
-      DEMO_VENDORS
+      baseVendors
     );
+
+    // Apply text search filter if user typed in search input
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase();
+      const textMatches = filtered.results.filter(
+        (v) =>
+          v.businessName.toLowerCase().includes(q) ||
+          v.category.toLowerCase().includes(q) ||
+          v.about.toLowerCase().includes(q) ||
+          v.serviceableAreas.some((a) => a.toLowerCase().includes(q)) ||
+          v.tags?.some((t) => t.toLowerCase().includes(q))
+      );
+      return {
+        ...filtered,
+        results: textMatches,
+        totalMatched: textMatches.length,
+      };
+    }
+
+    return filtered;
   }, [
-    isFlowCompleted,
-    isDateNotFinalized,
+    onlyOrganizers,
+    baseVendors,
     activeCategory,
-    activeCategories,
     activeCity,
     activeAreas,
     activeDate,
+    isDateNotFinalized,
     activeGuests,
-    minOrders,
     maxBudget,
     sortBy,
+    searchTerm,
     calendarOverrides,
   ]);
 
-  // Auto-scroll chat to bottom
-  useEffect(() => {
-    if (chatScrollRef.current) {
-      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
-    }
-  }, [messages, isTyping]);
-
-  // Open modal helper
-  const openEditModal = (modal: ActiveEditModal) => {
-    if (modal === 'DATE') setTempDate(activeDate);
-    if (modal === 'LOCATION') {
-      setTempCity(activeCity);
-      setTempAreas(activeAreas);
-      setAreaSearchTerm('');
-    }
-    if (modal === 'GUESTS') setTempGuests(activeGuests);
-    if (modal === 'CATEGORY') setTempCategory(activeCategory);
-    setActiveEditModal(modal);
-  };
-
-  // Helper: process message from user (typed or clicked)
-  const handleSendMessage = (textToSend?: string) => {
-    const text = (textToSend || input).trim();
-    if (!text || isTyping) return;
-
-    setInput('');
-    const userMsg: Msg = {
-      id: `m-${Date.now()}`,
-      from: 'me',
-      text,
-      timestamp: 'Just now',
-    };
-    setMessages((prev) => [...prev, userMsg]);
-    setIsTyping(true);
-
-    setTimeout(() => {
-      // 1. Check if Shortlist Remove Command
-      const removeMatch = text.match(/remove\s+(?:the\s+)?(.*?)\s+(?:from|in)\s+(?:my\s+)?shortlist/i);
-      if (removeMatch) {
-        const queryName = removeMatch[1].trim().toLowerCase();
-        const matchedItem = shortlist.find(
-          (item) =>
-            item.vendor.businessName.toLowerCase().includes(queryName) ||
-            item.vendorId.toLowerCase().includes(queryName)
-        );
-
-        if (matchedItem) {
-          removeFromShortlist(matchedItem.vendorId, activeEvent.id);
-          const aiMsg: Msg = {
-            id: `m-${Date.now() + 1}`,
-            from: 'ai',
-            text: `✓ Removed "${matchedItem.vendor.businessName}" from your shortlist for ${activeEvent.eventName}. Your shortlist has been updated immediately.`,
-            timestamp: 'Just now',
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-        } else {
-          const availableSaved = shortlist.map((i) => i.vendor.businessName).join(', ');
-          const aiMsg: Msg = {
-            id: `m-${Date.now() + 1}`,
-            from: 'ai',
-            text: `Could not find a vendor matching "${removeMatch[1]}" on your shortlist. Saved vendors currently include: ${availableSaved || 'None'}.`,
-            timestamp: 'Just now',
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-        }
-        setIsTyping(false);
-        return;
-      }
-
-      // 2. Check if Shortlist Query Command
-      if (
-        text.toLowerCase().includes('shortlist') ||
-        text.toLowerCase().includes('saved vendor') ||
-        text.toLowerCase().includes('saved organizer')
-      ) {
-        let matchingItems = shortlist;
-        const qLower = text.toLowerCase();
-        let queryLabel = 'saved vendors and organizers';
-
-        if (qLower.includes('cater') || qLower.includes('food')) {
-          matchingItems = shortlist.filter(
-            (i) => i.vendor.category === 'Catering and Food Services'
-          );
-          queryLabel = 'shortlisted caterers';
-        } else if (qLower.includes('organizer') || qLower.includes('planner')) {
-          matchingItems = shortlist.filter((i) => isOrganizerCategory(i.vendor.category));
-          queryLabel = 'shortlisted event organizers';
-        } else if (qLower.includes('pune')) {
-          matchingItems = shortlist.filter((i) => i.vendor.primaryCity === 'Pune');
-          queryLabel = 'shortlisted vendors in Pune';
-        } else if (qLower.includes('mumbai')) {
-          matchingItems = shortlist.filter((i) => i.vendor.primaryCity === 'Mumbai');
-          queryLabel = 'shortlisted vendors in Mumbai';
-        }
-
-        let replyText = '';
-        if (matchingItems.length === 0) {
-          replyText = `You do not have any ${queryLabel} saved on your shortlist yet. You can click "Add to Shortlist" on any vendor card to save them.`;
-        } else {
-          const names = matchingItems
-            .map((i) => `• ${i.vendor.businessName} (${i.vendor.category} in ${i.vendor.primaryCity})`)
-            .join('\n');
-          replyText = `Here are your ${queryLabel} (${matchingItems.length}):\n\n${names}\n\nYou can review complete quotes and budget details in the "My Shortlist" sidebar tab.`;
-        }
-
-        const aiMsg: Msg = {
-          id: `m-${Date.now() + 1}`,
-          from: 'ai',
-          text: replyText,
-          timestamp: 'Just now',
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-        setIsTyping(false);
-        return;
-      }
-
-      // 3. Regular Intent Parsing & Guided Journey
-      const parsed = parseSearchIntent(text, {
-        currentCity: hasAnsweredLocation ? activeCity : undefined,
-        currentDate: hasAnsweredDate ? activeDate : undefined,
-        isDateNotFinalized,
-        hasAnsweredDate,
-        currentAreas: hasAnsweredLocation ? activeAreas : [],
-        currentGuestCount: activeGuests,
-        currentCategory: hasAnsweredCategory ? (activeCategory as VendorCategory) : undefined,
-        currentCategories: hasAnsweredCategory ? activeCategories : undefined,
-        currentOccasion: hasAnsweredOccasion ? activeOccasion : undefined,
-        currentBudget: maxBudget,
-        hasAnsweredBudget,
-        flowCompleted: isFlowCompleted,
-        matchedCount: searchResults.totalMatched,
-      });
-
-      // Handle indexed shortlist command: e.g. "Shortlist the second vendor" (PRD Section 14 Scenario F)
-      if (parsed.shortlistIndex !== undefined) {
-        const targetVendor = searchResults.results[parsed.shortlistIndex];
-        if (targetVendor) {
-          toggleShortlist(targetVendor, eventId || activeEvent.id);
-          const aiMsg: Msg = {
-            id: `m-${Date.now() + 1}`,
-            from: 'ai',
-            text: `✓ Added "${targetVendor.businessName}" (${targetVendor.category} in ${targetVendor.primaryCity}) to your shortlist for ${activeEvent.eventName}.`,
-            timestamp: 'Just now',
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-        } else {
-          const aiMsg: Msg = {
-            id: `m-${Date.now() + 1}`,
-            from: 'ai',
-            text: `Could not find vendor #${parsed.shortlistIndex + 1} in current search results (${searchResults.results.length} total matches).`,
-            timestamp: 'Just now',
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-        }
-        setIsTyping(false);
-        return;
-      }
-
-      // Update state tracking
-      let updatedOccasion = hasAnsweredOccasion ? activeOccasion : '';
-      let updatedCity = hasAnsweredLocation ? activeCity : '';
-      let updatedAreas = hasAnsweredLocation ? activeAreas : [];
-      let updatedCategory = hasAnsweredCategory ? activeCategory : '';
-      let updatedCategories = hasAnsweredCategory ? activeCategories : [];
-      let updatedDate = hasAnsweredDate ? activeDate : '';
-      let updatedBudget = maxBudget;
-      let updatedHasBudget = hasAnsweredBudget;
-      let updatedHasOccasion = hasAnsweredOccasion;
-      let updatedHasLocation = hasAnsweredLocation;
-      let updatedHasCategory = hasAnsweredCategory;
-      let updatedHasDate = hasAnsweredDate;
-      let effectiveDateNotFinalized = isDateNotFinalized;
-
-      if (parsed.detectedOccasion) {
-        setActiveOccasion(parsed.detectedOccasion);
-        setHasAnsweredOccasion(true);
-        updatedOccasion = parsed.detectedOccasion;
-        updatedHasOccasion = true;
-      }
-
-      if (parsed.detectedCity) {
-        setActiveCity(parsed.detectedCity);
-        changeCity(parsed.detectedCity);
-        setHasAnsweredLocation(true);
-        updatedCity = parsed.detectedCity;
-        updatedHasLocation = true;
-      }
-
-      if (parsed.detectedAreas && parsed.detectedAreas.length > 0) {
-        setActiveAreas(parsed.detectedAreas);
-        setHasAnsweredLocation(true);
-        updatedAreas = parsed.detectedAreas;
-        updatedHasLocation = true;
-      } else if (parsed.detectedCity && parsed.detectedCity !== activeCity) {
-        setActiveAreas([]);
-        updatedAreas = [];
-      }
-
-      if (parsed.detectedCategory) {
-        setActiveCategory(parsed.detectedCategory);
-        setHasAnsweredCategory(true);
-        updatedCategory = parsed.detectedCategory;
-        updatedHasCategory = true;
-      }
-
-      if (parsed.detectedCategories && parsed.detectedCategories.length > 0) {
-        setActiveCategories(parsed.detectedCategories);
-        setHasAnsweredCategory(true);
-        updatedCategories = parsed.detectedCategories;
-        updatedHasCategory = true;
-      }
-
-      if (parsed.isBudgetAnswer || parsed.detectedMaxBudget !== undefined) {
-        setMaxBudget(parsed.detectedMaxBudget);
-        setHasAnsweredBudget(true);
-        updatedBudget = parsed.detectedMaxBudget;
-        updatedHasBudget = true;
-        if (parsed.detectedMaxBudget) {
-          setActiveBudgetText(`₹${parsed.detectedMaxBudget.toLocaleString('en-IN')}`);
-        } else {
-          setActiveBudgetText('Flexible / Quotations');
-        }
-      }
-
-      if (parsed.isDateAnswer || parsed.detectedDate || parsed.isDateNotFinalized) {
-        if (parsed.detectedDate) {
-          setActiveDate(parsed.detectedDate);
-          setIsDateNotFinalized(false);
-          effectiveDateNotFinalized = false;
-          updatedDate = parsed.detectedDate;
-        } else if (parsed.isDateNotFinalized) {
-          setActiveDate('');
-          setIsDateNotFinalized(true);
-          effectiveDateNotFinalized = true;
-          updatedDate = '';
-        }
-        setHasAnsweredDate(true);
-        updatedHasDate = true;
-      }
-
-      if (parsed.detectedGuestCount) setActiveGuests(parsed.detectedGuestCount);
-      if (parsed.detectedSortBy) setSortBy(parsed.detectedSortBy);
-
-      if (parsed.suggestedOptions) {
-        setCurrentSuggestions(parsed.suggestedOptions);
-      }
-
-      // Check if all 5 questions have been answered or flow is completed
-      const allFiveAnswered =
-        isRequirementsComplete({
-          occasion: updatedOccasion,
-          city: (updatedCity || activeCity) as City,
-          category: (updatedCategory || activeCategory) as VendorCategory,
-          hasAnsweredBudget: updatedHasBudget,
-          budget: updatedBudget,
-          hasAnsweredDate: updatedHasDate,
-          date: updatedDate,
-          isDateNotFinalized: effectiveDateNotFinalized,
-        }) || Boolean(parsed.flowCompleted);
-
-      let replyText = parsed.assistantReply;
-
-      if (allFiveAnswered) {
-        setIsFlowCompleted(true);
-        setCurrentSuggestions(SUGGESTIONS_COMPLETED);
-
-        // Save completed event context into memory / localStorage (PRD Section 4 & 5)
-        const completedDiscovery = {
-          occasion: updatedOccasion,
-          city: updatedCity || activeCity,
-          areas: updatedAreas,
-          category: updatedCategory || activeCategory,
-          categories: updatedCategories.length > 0 ? updatedCategories : [updatedCategory || activeCategory],
-          hasAnsweredBudget: true,
-          budget: updatedBudget,
-          budgetText: parsed.detectedMaxBudget
-            ? `₹${parsed.detectedMaxBudget.toLocaleString('en-IN')}`
-            : activeBudgetText || 'Flexible / Quotations',
-          hasAnsweredDate: true,
-          date: updatedDate,
-          isDateNotFinalized: effectiveDateNotFinalized,
-          isFlowCompleted: true,
-        };
-        try {
-          localStorage.setItem(`wedora_completed_discovery_${effectiveEventId}`, JSON.stringify(completedDiscovery));
-        } catch {}
-
-        if (!isFlowCompleted) {
-          const testResults = filterVendors(
-            {
-              category: updatedCategory || activeCategory,
-              categories: updatedCategories.length > 0 ? updatedCategories : activeCategories,
-              city: (updatedCity || activeCity) as City,
-              areas: updatedAreas.length > 0 ? updatedAreas : undefined,
-              date: effectiveDateNotFinalized ? undefined : (updatedDate || undefined),
-              guestCount: activeGuests,
-              maxBudget: updatedBudget,
-            },
-            calendarOverrides,
-            DEMO_VENDORS
-          );
-
-          if (testResults.totalMatched > 0) {
-            replyText = FINAL_MESSAGE_MATCHES;
-          } else {
-            replyText = FINAL_MESSAGE_NO_MATCHES;
-          }
-        }
-      } else {
-        setIsFlowCompleted(false);
-      }
-
-      const aiMsg: Msg = {
-        id: `m-${Date.now() + 1}`,
-        from: 'ai',
-        text: replyText,
-        timestamp: 'Just now',
-      };
-
-      setMessages((prev) => [...prev, aiMsg]);
-      setIsTyping(false);
-    }, 380);
-  };
-
-  // Date selection handler
-  const handleApplyDate = (newDate: string) => {
-    if (!newDate || newDate < todayStr) {
-      alert('Please select a valid upcoming event date.');
-      return;
-    }
-    setActiveDate(newDate);
-    setActiveEditModal('NONE');
-
-    // Trigger next conversational step naturally
-    handleSendMessage(`Date set to ${newDate}`);
-  };
-
-  // City & Area selection handler
-  const handleApplyLocation = () => {
-    setActiveCity(tempCity);
-    changeCity(tempCity);
-    setActiveAreas(tempAreas);
-    setActiveEditModal('NONE');
-
-    const areaDesc =
-      tempAreas.length > 0 ? tempAreas.join(', ') : `Any Area in ${tempCity}`;
-    handleSendMessage(`Location set to ${tempCity} (${areaDesc})`);
-  };
-
-  // Guest count selection handler
-  const handleApplyGuests = (count: number) => {
-    if (count <= 0) {
-      alert('Please enter a positive whole number for guests.');
-      return;
-    }
-    setActiveGuests(count);
-    setActiveEditModal('NONE');
-    handleSendMessage(`${count} guests`);
-  };
-
-  // Category selection handler
-  const handleApplyCategory = (cat: string) => {
-    setActiveCategory(cat);
-    setActiveEditModal('NONE');
-    handleSendMessage(cat);
-  };
-
-  // Refresh Results button
-  const handleRefreshResults = () => {
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `m-${Date.now()}`,
-        from: 'ai',
-        text: `Refreshed results against current vendor registry and live calendar availability. All search parameters remain intact. Showing ${searchResults.totalMatched} verified match(es).`,
-        timestamp: 'Just now',
-      },
-    ]);
-  };
-
-  // Start New Conversation button
-  const handleStartNewConversation = () => {
-    try {
-      localStorage.removeItem(`wedora_completed_discovery_${effectiveEventId}`);
-    } catch {}
-    setMessages([INITIAL_MESSAGE]);
-    setActiveOccasion('');
-    setHasAnsweredOccasion(false);
-    setHasAnsweredLocation(false);
-    setHasAnsweredCategory(false);
-    setHasAnsweredBudget(false);
-    setHasAnsweredDate(false);
-    setIsFlowCompleted(false);
-    setIsDateNotFinalized(false);
-    setActiveBudgetText('');
-    setMaxBudget(undefined);
-    setActiveAreas([]);
-    setCurrentSuggestions(SUGGESTIONS_Q1);
-  };
+  // Comparison Vendors
+  const comparedVendors = useMemo(() => {
+    return DEMO_VENDORS.filter((v) => compareIds.includes(v.id));
+  }, [compareIds]);
 
   const handleToggleCompare = (id: string) => {
     setCompareIds((prev) =>
@@ -702,9 +229,95 @@ export function AIDiscovery({ eventId, initialCategory }: AIDiscoveryProps) {
     );
   };
 
-  const comparedVendors = useMemo(() => {
-    return DEMO_VENDORS.filter((v) => compareIds.includes(v.id));
-  }, [compareIds]);
+  // Build Vendor Bundle for Planner
+  const handleBuildBundle = () => {
+    const catering =
+      DEMO_VENDORS.find(
+        (v) => v.category === 'Catering and Food Services' && v.primaryCity === activeCity
+      ) || DEMO_VENDORS[0];
+    const decor =
+      DEMO_VENDORS.find(
+        (v) => (v.category === 'Floral and Event Decor' || v.category.includes('Decor')) && v.primaryCity === activeCity
+      ) || DEMO_VENDORS[1];
+    const photo =
+      DEMO_VENDORS.find(
+        (v) => (v.category === 'Photography and Cinematography' || v.category.includes('Photo')) && v.primaryCity === activeCity
+      ) || DEMO_VENDORS[2];
+    const venue =
+      DEMO_VENDORS.find(
+        (v) => (v.category === 'Venues and Banquet Spaces' || v.category.includes('Venue')) && v.primaryCity === activeCity
+      ) || DEMO_VENDORS[3];
+
+    const bundle: VendorBundleItem[] = [
+      {
+        category: 'Venues and Banquet Spaces',
+        vendor: venue,
+        matchReason: 'Historical venue partner · 99% capacity compliance',
+      },
+      {
+        category: 'Catering and Food Services',
+        vendor: catering,
+        matchReason: 'Previously collaborated at venue · 98% on-time delivery',
+      },
+      {
+        category: 'Floral and Event Decor',
+        vendor: decor,
+        matchReason: 'Preferred decor partner · 4.9 recorded delivery score',
+      },
+      {
+        category: 'Photography and Cinematography',
+        vendor: photo,
+        matchReason: 'Consistent milestone delivery · Verified client feedback',
+      },
+    ];
+
+    setVendorBundle(bundle);
+    setSwappingCategory(null);
+  };
+
+  // Swap Vendor in Bundle
+  const handleSwapVendor = (categoryToSwap: string, newVendor: Vendor) => {
+    if (!vendorBundle) return;
+    setVendorBundle((prev) =>
+      prev
+        ? prev.map((item) =>
+            item.category === categoryToSwap
+              ? { ...item, vendor: newVendor, matchReason: 'Swapped by organizer' }
+              : item
+          )
+        : null
+    );
+    setSwappingCategory(null);
+  };
+
+  // Date apply handler
+  const handleApplyDate = (newDate: string) => {
+    if (!newDate || newDate < todayStr) {
+      alert('Please select a valid upcoming event date.');
+      return;
+    }
+    setActiveDate(newDate);
+    setIsDateNotFinalized(false);
+    setActiveEditModal('NONE');
+  };
+
+  // City & Area apply handler
+  const handleApplyLocation = () => {
+    setActiveCity(tempCity);
+    changeCity(tempCity);
+    setActiveAreas(tempAreas);
+    setActiveEditModal('NONE');
+  };
+
+  // Guest count apply handler
+  const handleApplyGuests = (count: number) => {
+    if (count <= 0) {
+      alert('Please enter a positive whole number for guests.');
+      return;
+    }
+    setActiveGuests(count);
+    setActiveEditModal('NONE');
+  };
 
   // Filter localities for active temp city in modal
   const availableLocalities = tempCity === 'Mumbai' ? MUMBAI_LOCALITIES : PUNE_LOCALITIES;
@@ -713,480 +326,452 @@ export function AIDiscovery({ eventId, initialCategory }: AIDiscoveryProps) {
   );
 
   return (
-    <div className="h-[calc(100vh-6rem)] min-h-[640px] flex flex-col overflow-hidden space-y-3">
-      {/* Mobile Tab Toggle */}
-      <div className="flex rounded-2xl bg-secondary p-1 lg:hidden shrink-0">
-        <button
-          onClick={() => setMobileTab('chat')}
-          className={`flex-1 py-2 text-xs font-medium rounded-xl transition ${
-            mobileTab === 'chat'
-              ? 'bg-card text-plum shadow-soft font-semibold'
-              : 'text-muted-foreground'
-          }`}
-        >
-          <Sparkles className="size-3.5 inline mr-1 text-gold" /> AI Assistant Chat
-        </button>
-        <button
-          onClick={() => setMobileTab('results')}
-          className={`flex-1 py-2 text-xs font-medium rounded-xl transition ${
-            mobileTab === 'results'
-              ? 'bg-card text-plum shadow-soft font-semibold'
-              : 'text-muted-foreground'
-          }`}
-        >
-          <Utensils className="size-3.5 inline mr-1 text-gold" />{' '}
-          {isFlowCompleted
-            ? `Vendor Results (${searchResults.totalMatched})`
-            : 'Vendor Recommendations'}
-        </button>
-      </div>
-
-      {/* Main Grid: Left Panel (38% Chatbot), Right Panel (62% Vendor Results) */}
-      <div className="flex-1 min-h-0 grid lg:grid-cols-[38fr_62fr] gap-6 overflow-hidden">
-        {/* ================= LEFT COLUMN: FIXED CHATBOT PANEL (38%) ================= */}
-        <div
-          className={`h-full flex flex-col rounded-3xl border bg-card shadow-soft overflow-hidden ${
-            mobileTab === 'chat' ? 'flex' : 'hidden lg:flex'
-          }`}
-        >
-          {/* 1. Chat Header (shrink-0) */}
-          <div className="flex items-center justify-between border-b p-3.5 bg-secondary/30 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-full bg-gradient-plum text-gold shrink-0">
-                <Sparkles className="size-4.5" />
-              </div>
-              <div>
-                <h3 className="font-display text-sm sm:text-base text-plum font-semibold leading-tight">
-                  Wedora AI Coordinator
-                </h3>
-                {llmStatus.isConfigured ? (
-                  <span className="text-[10px] text-success flex items-center gap-1 font-medium bg-success-soft/60 px-2 py-0.5 rounded-full border border-success/30">
-                    <span className="size-1.5 rounded-full bg-success inline-block"></span>
-                    Live LLM Active ({llmStatus.provider})
-                  </span>
-                ) : (
-                  <span
-                    className="text-[10px] text-amber-700 dark:text-amber-400 flex items-center gap-1 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30"
-                    title="GEMINI_API_KEY is unconfigured in server/.env. Running deterministic demo fallback against verified database."
-                  >
-                    <span className="size-1.5 rounded-full bg-amber-500 inline-block animate-pulse"></span>
-                    AI Mode: Deterministic Demo Fallback
-                  </span>
-                )}
-              </div>
+    <div className="h-full flex flex-col space-y-4">
+      {/* ================= TOP DIRECTORY HEADER & ACTIONS ================= */}
+      <div className="rounded-3xl border bg-card p-4 sm:p-5 shadow-soft space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-plum text-gold shrink-0">
+              {onlyOrganizers ? <Briefcase className="size-5" /> : <Store className="size-5" />}
             </div>
-
-            {/* Header Actions */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleRefreshResults}
-                title="Refresh Results"
-                className="p-1.5 text-muted-foreground hover:text-plum hover:bg-gold-soft rounded-full transition"
-              >
-                <RefreshCw className="size-3.5" />
-              </button>
-              <button
-                onClick={handleStartNewConversation}
-                title="Start New Conversation"
-                className="p-1.5 text-muted-foreground hover:text-plum hover:bg-gold-soft rounded-full transition flex items-center gap-1 text-[11px] font-semibold"
-              >
-                <RotateCcw className="size-3.5" />
-                <span className="hidden sm:inline">New Chat</span>
-              </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-display text-plum font-semibold">
+                  {onlyOrganizers
+                    ? 'Verified Event Planners & Coordinators'
+                    : activeCategory === 'All Categories'
+                    ? 'All Verified Wedding Vendors'
+                    : activeCategory}
+                </h2>
+                <span className="rounded-full bg-gold-soft text-navy px-2.5 py-0.5 text-xs font-bold border border-gold/40">
+                  {searchResults.totalMatched} Verified {onlyOrganizers ? 'Planners' : 'Matches'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {onlyOrganizers
+                  ? `Professional wedding planners and end-to-end event management teams in ${activeCity}. Only verified event organizers are displayed.`
+                  : `Verified wedding professionals serving ${activeCity} ${
+                      activeAreas.length > 0 ? `(${activeAreas.join(', ')})` : '(All Localities)'
+                    } · ${isDateNotFinalized ? 'Date: Flexible' : `Date: ${activeDate}`}`}
+              </p>
             </div>
           </div>
 
-          {/* 2. Messages Stream (flex-1 overflow-y-auto min-h-0) */}
-          <div ref={chatScrollRef} className="flex-1 space-y-3.5 overflow-y-auto px-3.5 py-3 text-xs">
-            {messages.map((m) => (
-              <div key={m.id} className="space-y-2">
-                <div
-                  className={`max-w-[88%] rounded-2xl p-3.5 leading-relaxed whitespace-pre-line ${
-                    m.from === 'me'
-                      ? 'ml-auto bg-plum text-primary-foreground rounded-br-sm'
-                      : 'bg-secondary text-secondary-foreground rounded-bl-sm border'
+          {/* Header Action Buttons (Planner Bundle Button, Reset, etc.) */}
+          <div className="flex items-center gap-2">
+            {role === 'PLANNER' && (
+              <>
+                {vendorBundle ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs border-gold text-plum hover:bg-gold-soft font-semibold"
+                    onClick={() => {
+                      setVendorBundle(null);
+                      setSwappingCategory(null);
+                    }}
+                  >
+                    <RotateCcw className="size-3.5 mr-1.5" /> Return to Full Directory
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="hero"
+                    className="text-xs font-semibold"
+                    onClick={handleBuildBundle}
+                  >
+                    <Layers className="size-3.5 mr-1.5" /> Build Vendor Bundle
+                  </Button>
+                )}
+              </>
+            )}
+
+            {/* City Switcher Pill */}
+            <div className="flex rounded-full bg-secondary p-1 border">
+              {(['Pune', 'Mumbai'] as City[]).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => {
+                    setActiveCity(c);
+                    changeCity(c);
+                    setActiveAreas([]);
+                  }}
+                  className={`px-3 py-1 text-xs rounded-full font-medium transition ${
+                    activeCity === c
+                      ? 'bg-plum text-primary-foreground font-semibold shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <div>{m.text}</div>
-                </div>
-              </div>
-            ))}
-
-            {isTyping && (
-              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-secondary p-3 text-xs text-muted-foreground flex items-center gap-2">
-                <Sparkles className="size-3.5 animate-spin text-gold" />
-                Wedora AI is coordinating with verified vendor registries...
-              </div>
-            )}
-          </div>
-
-          {/* Optional Suggested Answer Chips (Section 2 & 6) */}
-          {currentSuggestions && currentSuggestions.length > 0 && !isTyping && (
-            <div className="px-3.5 py-2 border-t bg-secondary/30 shrink-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-                <Sparkles className="size-3 text-gold" /> Suggestions:
-              </span>
-              {currentSuggestions.map((opt) => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => handleSendMessage(opt)}
-                  className="text-[11px] px-2.5 py-1 rounded-full bg-card hover:bg-gold-soft text-navy border hover:border-gold transition shrink-0 font-medium shadow-2xs"
-                >
-                  {opt}
+                  {c}
                 </button>
               ))}
             </div>
-          )}
-
-          {/* 3. Input Bar (shrink-0 border-t bg-card) */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex gap-2 p-3 border-t bg-card shrink-0"
-          >
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message or answer here (e.g. Wedding, Pune, Catering)..."
-              className="flex-1 rounded-full border bg-background px-4 py-2 text-xs outline-none focus:border-gold font-medium"
-            />
-            <Button
-              type="submit"
-              variant="hero"
-              size="icon"
-              disabled={isTyping || !input.trim()}
-              aria-label="Send message"
-            >
-              <Send className="size-3.5" />
-            </Button>
-          </form>
+          </div>
         </div>
 
-        {/* ================= RIGHT COLUMN: INDEPENDENTLY SCROLLING VENDORS (62%) ================= */}
-        <div
-          className={`h-full flex flex-col min-h-0 overflow-hidden ${
-            mobileTab === 'results' ? 'flex' : 'hidden lg:flex'
-          }`}
-        >
-          {!isFlowCompleted ? (
-            /* ================= FRIENDLY EMPTY STATE (MANDATORY 5-QUESTION PROGRESS) ================= */
-            <div className="h-full flex flex-col min-h-0">
-              <div className="shrink-0 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-3.5 sm:p-4 border shadow-soft">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg sm:text-xl font-display text-plum font-semibold">
-                      Wedora Vendor Recommendations
-                    </h2>
-                    <span className="rounded-full bg-gold-soft text-navy px-2.5 py-0.5 text-xs font-bold border border-gold/40">
-                      Step {(!hasAnsweredOccasion ? 1 : !hasAnsweredLocation ? 2 : !hasAnsweredCategory ? 3 : !hasAnsweredBudget ? 4 : 5)} of 5
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {FRIENDLY_EMPTY_STATE}
-                  </p>
-                </div>
-              </div>
+        {/* Filter Controls Bar */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+          {/* Quick Search Input */}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="size-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder={
+                onlyOrganizers
+                  ? 'Search planners by name, area, or speciality...'
+                  : 'Search vendors by business name, keyword, or area...'
+              }
+              className="w-full rounded-full border bg-background pl-8 pr-3 py-1.5 text-xs outline-none focus:border-gold font-medium text-navy"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
 
-              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1.5 space-y-3">
-                <div className="rounded-3xl border bg-card p-6 sm:p-8 shadow-soft space-y-6">
-                  <div className="flex items-start gap-3.5 pb-4 border-b">
-                    <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-plum text-gold shrink-0 mt-0.5">
-                      <Sparkles className="size-5" />
-                    </div>
-                    <div>
-                      <h3 className="font-display text-base sm:text-lg text-plum font-semibold leading-tight">
-                        {FRIENDLY_EMPTY_STATE}
-                      </h3>
-                      <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                        Wedora tailors vendor recommendations strictly to your specific event requirements. Complete the 5 questions on the left, and verified vendor listings with live calendar availability will appear here automatically.
-                      </p>
-                    </div>
-                  </div>
+          {/* Area / Localities Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTempCity(activeCity);
+              setTempAreas(activeAreas);
+              setAreaSearchTerm('');
+              setActiveEditModal('LOCATION');
+            }}
+            className="text-xs rounded-full h-8 px-3 border-border text-navy"
+          >
+            <MapPin className="size-3.5 mr-1.5 text-gold" />
+            {activeAreas.length > 0 ? `${activeAreas.length} Areas Selected` : `All Areas in ${activeCity}`}
+          </Button>
 
-                  {/* 5-Step Progressive Checklist */}
-                  <div className="space-y-3 text-xs">
-                    {/* Step 1 */}
-                    <div className={`p-3.5 rounded-2xl border transition flex items-center justify-between ${
-                      hasAnsweredOccasion ? 'bg-success-soft/30 border-success/30' : 'bg-secondary/40 border-border'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        {hasAnsweredOccasion ? (
-                          <CheckCircle2 className="size-4.5 text-success shrink-0" />
-                        ) : (
-                          <span className="flex size-4.5 items-center justify-center rounded-full bg-gold/20 text-[10px] font-bold text-navy">1</span>
-                        )}
-                        <div>
-                          <div className="font-semibold text-navy">Question 1 — Event</div>
-                          <div className={hasAnsweredOccasion ? 'font-medium text-plum mt-0.5' : 'text-muted-foreground italic mt-0.5'}>
-                            {hasAnsweredOccasion ? activeOccasion : QUESTION_1_EVENT}
-                          </div>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        hasAnsweredOccasion ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {hasAnsweredOccasion ? 'Completed' : 'Awaiting'}
-                      </span>
-                    </div>
+          {/* Date Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTempDate(activeDate);
+              setActiveEditModal('DATE');
+            }}
+            className="text-xs rounded-full h-8 px-3 border-border text-navy"
+          >
+            <CalendarDays className="size-3.5 mr-1.5 text-gold" />
+            {isDateNotFinalized ? 'Date Not Finalized' : activeDate}
+          </Button>
 
-                    {/* Step 2 */}
-                    <div className={`p-3.5 rounded-2xl border transition flex items-center justify-between ${
-                      hasAnsweredLocation ? 'bg-success-soft/30 border-success/30' : 'bg-secondary/40 border-border'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        {hasAnsweredLocation ? (
-                          <CheckCircle2 className="size-4.5 text-success shrink-0" />
-                        ) : (
-                          <span className="flex size-4.5 items-center justify-center rounded-full bg-gold/20 text-[10px] font-bold text-navy">2</span>
-                        )}
-                        <div>
-                          <div className="font-semibold text-navy">Question 2 — Location</div>
-                          <div className={hasAnsweredLocation ? 'font-medium text-plum mt-0.5' : 'text-muted-foreground italic mt-0.5'}>
-                            {hasAnsweredLocation
-                              ? `${activeCity}${activeAreas.length > 0 ? ` (${activeAreas.join(', ')})` : ' (City-wide)'}`
-                              : QUESTION_2_LOCATION}
-                          </div>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        hasAnsweredLocation ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {hasAnsweredLocation ? 'Completed' : 'Awaiting'}
-                      </span>
-                    </div>
+          {/* Guest Count Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setTempGuests(activeGuests);
+              setActiveEditModal('GUESTS');
+            }}
+            className="text-xs rounded-full h-8 px-3 border-border text-navy"
+          >
+            <Users className="size-3.5 mr-1.5 text-gold" />
+            {activeGuests} Guests
+          </Button>
 
-                    {/* Step 3 */}
-                    <div className={`p-3.5 rounded-2xl border transition flex items-center justify-between ${
-                      hasAnsweredCategory ? 'bg-success-soft/30 border-success/30' : 'bg-secondary/40 border-border'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        {hasAnsweredCategory ? (
-                          <CheckCircle2 className="size-4.5 text-success shrink-0" />
-                        ) : (
-                          <span className="flex size-4.5 items-center justify-center rounded-full bg-gold/20 text-[10px] font-bold text-navy">3</span>
-                        )}
-                        <div>
-                          <div className="font-semibold text-navy">Question 3 — Vendor Category</div>
-                          <div className={hasAnsweredCategory ? 'font-medium text-plum mt-0.5' : 'text-muted-foreground italic mt-0.5'}>
-                            {hasAnsweredCategory ? activeCategory : QUESTION_3_CATEGORY}
-                          </div>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        hasAnsweredCategory ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {hasAnsweredCategory ? 'Completed' : 'Awaiting'}
-                      </span>
-                    </div>
+          {/* Budget Filter */}
+          <div className="flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 h-8">
+            <DollarSign className="size-3.5 text-gold" />
+            <span className="text-[11px] text-muted-foreground">Max:</span>
+            <input
+              type="number"
+              placeholder="Any budget"
+              value={maxBudget || ''}
+              onChange={(e) => setMaxBudget(e.target.value ? parseInt(e.target.value, 10) : undefined)}
+              className="w-20 bg-transparent text-xs font-semibold text-navy outline-none"
+            />
+          </div>
 
-                    {/* Step 4 */}
-                    <div className={`p-3.5 rounded-2xl border transition flex items-center justify-between ${
-                      hasAnsweredBudget ? 'bg-success-soft/30 border-success/30' : 'bg-secondary/40 border-border'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        {hasAnsweredBudget ? (
-                          <CheckCircle2 className="size-4.5 text-success shrink-0" />
-                        ) : (
-                          <span className="flex size-4.5 items-center justify-center rounded-full bg-gold/20 text-[10px] font-bold text-navy">4</span>
-                        )}
-                        <div>
-                          <div className="font-semibold text-navy">Question 4 — Budget</div>
-                          <div className={hasAnsweredBudget ? 'font-medium text-plum mt-0.5' : 'text-muted-foreground italic mt-0.5'}>
-                            {hasAnsweredBudget
-                              ? (activeBudgetText || (maxBudget ? `₹${maxBudget.toLocaleString('en-IN')}` : 'Flexible / Quotations'))
-                              : QUESTION_4_BUDGET}
-                          </div>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        hasAnsweredBudget ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {hasAnsweredBudget ? 'Completed' : 'Awaiting'}
-                      </span>
-                    </div>
+          {/* Sort Dropdown */}
+          <div className="flex items-center gap-1.5 ml-auto">
+            <span className="text-muted-foreground text-[11px] font-medium flex items-center gap-1">
+              <SlidersHorizontal className="size-3 text-gold" /> Sort:
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as VendorSortOption)}
+              className="rounded-full border bg-background px-3 py-1.5 text-xs font-semibold text-navy outline-none focus:border-gold cursor-pointer h-8"
+            >
+              <option value="recommended">Recommended (Performance & Trust)</option>
+              <option value="completed_orders">Most Completed Orders</option>
+              <option value="referrals">Most Successful Referrals</option>
+              <option value="on_time_delivery">Highest On-Time Delivery</option>
+              <option value="repeat_orders">Most Repeat Bookings</option>
+              <option value="price_asc">Starting Price: Low to High</option>
+              <option value="price_desc">Starting Price: High to Low</option>
+            </select>
+          </div>
+        </div>
 
-                    {/* Step 5 */}
-                    <div className={`p-3.5 rounded-2xl border transition flex items-center justify-between ${
-                      hasAnsweredDate ? 'bg-success-soft/30 border-success/30' : 'bg-secondary/40 border-border'
-                    }`}>
-                      <div className="flex items-center gap-3">
-                        {hasAnsweredDate ? (
-                          <CheckCircle2 className="size-4.5 text-success shrink-0" />
-                        ) : (
-                          <span className="flex size-4.5 items-center justify-center rounded-full bg-gold/20 text-[10px] font-bold text-navy">5</span>
-                        )}
-                        <div>
-                          <div className="font-semibold text-navy">Question 5 — Date</div>
-                          <div className={hasAnsweredDate ? 'font-medium text-plum mt-0.5' : 'text-muted-foreground italic mt-0.5'}>
-                            {hasAnsweredDate
-                              ? (isDateNotFinalized ? 'Not finalized yet (Availability unverified)' : activeDate)
-                              : QUESTION_5_DATE}
-                          </div>
-                        </div>
-                      </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        hasAnsweredDate ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {hasAnsweredDate ? 'Completed' : 'Awaiting'}
-                      </span>
-                    </div>
-                  </div>
+        {/* Quick Category Chips */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1">
+          {categoryChips.map((cat) => {
+            const isSelected = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setActiveCategory(cat)}
+                className={`text-xs px-3 py-1 rounded-full whitespace-nowrap transition font-medium ${
+                  isSelected
+                    ? 'bg-plum text-primary-foreground font-semibold shadow-xs'
+                    : 'bg-secondary text-navy hover:bg-gold-soft hover:text-plum border'
+                }`}
+              >
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-                  <div className="rounded-2xl bg-gold-soft/40 p-4 border border-gold/30 flex items-start gap-3">
-                    <Clock className="size-4 text-gold shrink-0 mt-0.5" />
-                    <p className="text-xs text-navy leading-relaxed">
-                      <strong>Automatic Vendor Display:</strong> Verified vendor listings will appear automatically right here once Question 5 has been answered or explicitly marked as not finalized yet.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            /* ================= FULL VENDOR RESULTS CONTAINER ================= */
-            <>
-              {/* Header Bar inside Right Panel (shrink-0) */}
-              <div className="shrink-0 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-3.5 sm:p-4 border shadow-soft">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg sm:text-xl font-display text-plum font-semibold">
-                      {activeCategory}
-                    </h2>
-                    <span className="rounded-full bg-gold-soft text-navy px-2.5 py-0.5 text-xs font-bold border border-gold/40">
-                      {searchResults.totalMatched} Verified Matches
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {activeCity} {activeAreas.length > 0 ? `(${activeAreas.join(', ')})` : '(Any Area)'} · {isDateNotFinalized ? 'Date: Not finalized yet' : activeDate} {maxBudget ? `· Budget: ≤ ₹${maxBudget.toLocaleString('en-IN')}` : '· Flexible Budget'}
-                  </p>
-                </div>
-
-                {/* Sort Controls */}
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-muted-foreground font-medium flex items-center gap-1">
-                    <SlidersHorizontal className="size-3 text-gold" />
-                    Sort:
+      {/* ================= MAIN VENDOR CONTENT BOX ================= */}
+      <div className="rounded-3xl border bg-card/60 p-4 sm:p-5 shadow-soft flex flex-col h-[580px] xl:h-[calc(100vh-21rem)] min-h-[460px] overflow-hidden">
+        {vendorBundle && vendorBundle.length > 0 ? (
+          /* ================= VENDOR BUNDLE DISPLAY FOR ORGANIZER (PRD Section 8) ================= */
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-gold-soft/50 p-3.5 border border-gold/40 shadow-soft shrink-0 mb-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Layers className="size-4 text-plum" />
+                  <h3 className="text-sm font-display text-plum font-semibold">
+                    Coordinated Vendor Bundle for {activeEvent.eventName}
+                  </h3>
+                  <span className="rounded-full bg-plum text-white px-2 py-0.5 text-[10px] font-bold">
+                    {vendorBundle.length} Coordinated Services
                   </span>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as VendorSortOption)}
-                    className="rounded-full border bg-background px-3 py-1.5 text-xs font-semibold text-navy outline-none focus:border-gold cursor-pointer"
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Coordinated vendors with verified historical collaboration in {activeCity}. You can swap any individual service below without losing the rest of your bundle.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-7 border-gold text-plum hover:bg-gold-soft"
+                onClick={() => {
+                  setVendorBundle(null);
+                  setSwappingCategory(null);
+                }}
+              >
+                <RotateCcw className="size-3 mr-1" /> Exit Bundle Mode
+              </Button>
+            </div>
+
+            {swappingCategory ? (
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden space-y-3">
+                <div className="p-2.5 bg-plum-soft rounded-xl border border-plum/30 flex items-center justify-between text-xs shrink-0">
+                  <div className="text-plum font-medium">
+                    Swapping <strong>{swappingCategory}</strong> — Select a replacement below to update your bundle:
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-xs text-plum h-7 px-2"
+                    onClick={() => setSwappingCategory(null)}
                   >
-                    <option value="recommended">Recommended (Performance & Trust)</option>
-                    <option value="completed_orders">Most Completed Orders</option>
-                    <option value="referrals">Most Successful Referrals</option>
-                    <option value="on_time_delivery">Highest On-Time Delivery</option>
-                    <option value="repeat_orders">Most Repeat Bookings</option>
-                    <option value="price_asc">Starting Price: Low to High</option>
-                    <option value="price_desc">Starting Price: High to Low</option>
-                  </select>
+                    <X className="size-3.5 mr-1" /> Cancel Swap
+                  </Button>
+                </div>
+
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2 space-y-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-secondary/40 [&::-webkit-scrollbar-thumb]:bg-gold/40 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gold">
+                  {DEMO_VENDORS.filter(
+                    (v) =>
+                      v.category === swappingCategory &&
+                      v.primaryCity === activeCity &&
+                      !vendorBundle.some((b) => b.vendor.id === v.id)
+                  ).map((candidate) => (
+                    <div key={candidate.id} className="relative">
+                      <VendorCard
+                        vendor={candidate}
+                        targetDate={activeDate}
+                        effectiveAvailability="Available"
+                        isComparing={compareIds.includes(candidate.id)}
+                        isShortlisted={isShortlisted(candidate.id, eventId || activeEvent.id)}
+                        selectedAreas={activeAreas}
+                        selectedCity={activeCity}
+                        onToggleCompare={handleToggleCompare}
+                        onViewProfile={(v) => setProfileVendor(v)}
+                        onRequestQuote={(v) => setQuoteVendor(v)}
+                        onShortlist={() => toggleShortlist(candidate, eventId || activeEvent.id)}
+                        onSwap={() => handleSwapVendor(swappingCategory, candidate)}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
-
-              {/* Independently Scrolling Vendor Cards Container */}
-              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1.5 space-y-4">
-                {searchResults.results.map((vendor) => {
-                  const effectiveStatus = isDateNotFinalized
-                    ? 'Unverified Availability'
-                    : getEffectiveAvailability(vendor, activeDate, calendarOverrides);
-                  const saved = isShortlisted(vendor.id, eventId || activeEvent.id);
-
-                  return (
+            ) : (
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2 space-y-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-secondary/40 [&::-webkit-scrollbar-thumb]:bg-gold/40 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gold">
+                {vendorBundle.map((item) => (
+                  <div key={item.vendor.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-gold flex items-center gap-1.5">
+                        <Sparkles className="size-3 text-gold" /> {item.category}
+                      </span>
+                      {item.matchReason && (
+                        <span className="text-[10px] text-plum font-medium bg-plum-soft px-2 py-0.5 rounded-full border border-plum/20">
+                          {item.matchReason}
+                        </span>
+                      )}
+                    </div>
                     <VendorCard
-                      key={vendor.id}
-                      vendor={vendor}
+                      vendor={item.vendor}
                       targetDate={isDateNotFinalized ? 'Not finalized yet' : activeDate}
-                      effectiveAvailability={effectiveStatus}
-                      isComparing={compareIds.includes(vendor.id)}
-                      isShortlisted={saved}
+                      effectiveAvailability="Available"
+                      isComparing={compareIds.includes(item.vendor.id)}
+                      isShortlisted={isShortlisted(item.vendor.id, eventId || activeEvent.id)}
                       selectedAreas={activeAreas}
                       selectedCity={activeCity}
                       onToggleCompare={handleToggleCompare}
                       onViewProfile={(v) => setProfileVendor(v)}
                       onRequestQuote={(v) => setQuoteVendor(v)}
-                      onShortlist={() => toggleShortlist(vendor, eventId || activeEvent.id)}
+                      onShortlist={() => toggleShortlist(item.vendor, eventId || activeEvent.id)}
+                      onSwap={() => setSwappingCategory(item.category)}
                     />
-                  );
-                })}
-
-                {/* Empty State */}
-                {searchResults.results.length === 0 && (
-                  <div className="rounded-3xl border bg-card p-12 text-center shadow-soft">
-                    <Clock className="size-12 mx-auto text-gold mb-3 animate-pulse" />
-                    <h3 className="text-xl font-display text-plum font-semibold">
-                      No Matching Vendors Found
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
-                      No verified vendors in <strong className="text-navy">{activeCity}</strong> match your exact criteria for {activeCategory} on {activeDate}.
-                    </p>
-                    <div className="mt-6 flex flex-wrap justify-center gap-2">
-                      <Button
-                        variant="soft"
-                        size="sm"
-                        onClick={() => setActiveAreas([])}
-                      >
-                        Expand to Any Area in {activeCity}
-                      </Button>
-                      <Button
-                        variant="soft"
-                        size="sm"
-                        onClick={() => {
-                          const otherCity = activeCity === 'Pune' ? 'Mumbai' : 'Pune';
-                          setActiveCity(otherCity);
-                          changeCity(otherCity);
-                          setActiveAreas([]);
-                        }}
-                      >
-                        Switch to {activeCity === 'Pune' ? 'Mumbai' : 'Pune'}
-                      </Button>
-                      <Button
-                        variant="hero"
-                        size="sm"
-                        onClick={handleStartNewConversation}
-                      >
-                        Start New Conversation
-                      </Button>
-                    </div>
                   </div>
-                )}
+                ))}
               </div>
+            )}
+          </div>
+        ) : (
+          /* ================= STANDARD FULL-WIDTH VENDOR / ORGANIZER GRID INSIDE SCROLLABLE BOX ================= */
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {/* Box Header Bar */}
+            <div className="flex items-center justify-between pb-3 mb-3 border-b shrink-0 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-navy">
+                  {onlyOrganizers
+                    ? 'Verified Event Planners'
+                    : activeCategory === 'All Categories'
+                    ? 'All Verified Vendors'
+                    : activeCategory}
+                </span>
+                <span>•</span>
+                <span className="text-gold font-bold">
+                  {searchResults.totalMatched} verified {onlyOrganizers ? 'organizers' : 'results'} in {activeCity}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span className="hidden sm:inline">Scroll within box to explore all</span>
+                <span className="inline-block animate-bounce text-gold">↓</span>
+              </div>
+            </div>
 
-              {/* Floating Compare Bar */}
-              {compareIds.length > 0 && (
-                <div className="shrink-0 mt-3 rounded-2xl bg-gradient-plum p-3.5 text-primary-foreground shadow-float flex flex-wrap items-center justify-between gap-3 animate-rise">
-                  <div className="flex items-center gap-2 text-xs">
-                    <CheckCircle2 className="size-4 text-gold shrink-0" />
-                    <span>
-                      <strong>{compareIds.length} vendor(s)</strong> selected for verified transaction comparison
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
+            {/* Scrollable list inside the Box */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-2 space-y-4 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-secondary/40 [&::-webkit-scrollbar-thumb]:bg-gold/40 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gold">
+              {searchResults.results.map((vendor) => {
+                const effectiveStatus = isDateNotFinalized
+                  ? 'Unverified Availability'
+                  : getEffectiveAvailability(vendor, activeDate, calendarOverrides);
+                const saved = isShortlisted(vendor.id, eventId || activeEvent.id);
+
+                return (
+                  <VendorCard
+                    key={vendor.id}
+                    vendor={vendor}
+                    targetDate={isDateNotFinalized ? 'Not finalized yet' : activeDate}
+                    effectiveAvailability={effectiveStatus}
+                    isComparing={compareIds.includes(vendor.id)}
+                    isShortlisted={saved}
+                    selectedAreas={activeAreas}
+                    selectedCity={activeCity}
+                    onToggleCompare={handleToggleCompare}
+                    onViewProfile={(v) => setProfileVendor(v)}
+                    onRequestQuote={(v) => setQuoteVendor(v)}
+                    onShortlist={() => toggleShortlist(vendor, eventId || activeEvent.id)}
+                  />
+                );
+              })}
+
+              {/* Empty State */}
+              {searchResults.results.length === 0 && (
+                <div className="rounded-2xl border bg-card p-12 text-center shadow-soft my-auto">
+                  <Clock className="size-12 mx-auto text-gold mb-3 animate-pulse" />
+                  <h3 className="text-xl font-display text-plum font-semibold">
+                    No Matching {onlyOrganizers ? 'Event Planners' : 'Vendors'} Found
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-2 max-w-md mx-auto leading-relaxed">
+                    No verified {onlyOrganizers ? 'event organizers' : 'vendors'} in{' '}
+                    <strong className="text-navy">{activeCity}</strong> match your exact filter criteria.
+                  </p>
+                  <div className="mt-6 flex flex-wrap justify-center gap-2">
                     <Button
+                      variant="soft"
                       size="sm"
-                      variant="ghost"
-                      className="text-xs text-primary-foreground hover:bg-white/10"
-                      onClick={() => setCompareIds([])}
+                      onClick={() => {
+                        setActiveAreas([]);
+                        setSearchTerm('');
+                        setMaxBudget(undefined);
+                        setActiveCategory(onlyOrganizers ? 'All Event Planners' : 'All Categories');
+                      }}
                     >
-                      Clear Selection
+                      Clear Filters & Show All in {activeCity}
                     </Button>
                     <Button
+                      variant="soft"
                       size="sm"
-                      variant="gold"
-                      onClick={() => setIsCompareOpen(true)}
+                      onClick={() => {
+                        const otherCity = activeCity === 'Pune' ? 'Mumbai' : 'Pune';
+                        setActiveCity(otherCity);
+                        changeCity(otherCity);
+                        setActiveAreas([]);
+                      }}
                     >
-                      Compare Metrics Now
+                      Switch to {activeCity === 'Pune' ? 'Mumbai' : 'Pune'}
                     </Button>
                   </div>
                 </div>
               )}
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ================= FUNCTIONAL INTERACTIVE SELECTION MODALS (FROM CONTEXT CARD [EDIT]) ================= */}
+      {/* Floating Compare Bar */}
+      {compareIds.length > 0 && (
+        <div className="shrink-0 rounded-2xl bg-gradient-plum p-3.5 text-primary-foreground shadow-float flex flex-wrap items-center justify-between gap-3 animate-rise">
+          <div className="flex items-center gap-2 text-xs">
+            <CheckCircle2 className="size-4 text-gold shrink-0" />
+            <span>
+              <strong>{compareIds.length} vendor(s)</strong> selected for verified transaction comparison
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-xs text-primary-foreground hover:bg-white/10"
+              onClick={() => setCompareIds([])}
+            >
+              Clear Selection
+            </Button>
+            <Button
+              size="sm"
+              variant="gold"
+              onClick={() => setIsCompareOpen(true)}
+            >
+              Compare Metrics Now
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODALS ================= */}
 
       {/* 1. Date Selection Modal */}
       {activeEditModal === 'DATE' && (
@@ -1458,63 +1043,6 @@ export function AIDiscovery({ eventId, initialCategory }: AIDiscoveryProps) {
                 </Button>
                 <Button variant="hero" onClick={() => handleApplyGuests(tempGuests)}>
                   Apply Guest Count
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. Category Selection Modal */}
-      {activeEditModal === 'CATEGORY' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-lg rounded-3xl bg-card p-6 shadow-float border border-gold/40 relative animate-rise my-8 text-xs">
-            <button
-              onClick={() => setActiveEditModal('NONE')}
-              className="absolute right-5 top-5 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-5" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-3">
-              <div className="flex size-10 items-center justify-center rounded-full bg-gradient-plum text-gold">
-                <Utensils className="size-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-display text-plum font-semibold">
-                  Select Vendor Service Category
-                </h3>
-                <p className="text-[11px] text-muted-foreground">
-                  Browse any of the 12 verified wedding vendor categories
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4 mt-4">
-              <div className="grid grid-cols-2 gap-2 max-h-72 overflow-y-auto p-1">
-                {ALL_CATEGORIES.map((cat) => (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => setTempCategory(cat)}
-                    className={`p-2.5 rounded-xl border text-left flex items-center justify-between transition ${
-                      tempCategory === cat
-                        ? 'border-gold bg-gold-soft font-semibold text-plum ring-2 ring-gold/40'
-                        : 'bg-secondary hover:bg-card'
-                    }`}
-                  >
-                    <span className="truncate">{cat}</span>
-                    {tempCategory === cat && <Check className="size-3.5 text-gold shrink-0 ml-1" />}
-                  </button>
-                ))}
-              </div>
-
-              <div className="pt-2 flex justify-end gap-2">
-                <Button variant="ghost" onClick={() => setActiveEditModal('NONE')}>
-                  Cancel
-                </Button>
-                <Button variant="hero" onClick={() => handleApplyCategory(tempCategory)}>
-                  Apply Category
                 </Button>
               </div>
             </div>

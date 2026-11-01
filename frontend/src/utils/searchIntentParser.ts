@@ -1,4 +1,9 @@
 import { City, VendorCategory, SearchIntent } from '../types/vendor';
+import {
+  CANONICAL_MUMBAI_LOCALITIES,
+  CANONICAL_PUNE_LOCALITIES,
+  resolveLocality,
+} from './localityRegistry';
 
 // Exact required messages and questions for the 5-question chatbot flow (Version 5.1)
 export const OPENING_MESSAGE =
@@ -194,36 +199,8 @@ export const CATEGORY_SYNONYMS: Record<string, VendorCategory> = {
   bridal: 'Makeup and Mehendi Artists',
 };
 
-export const MUMBAI_LOCALITIES: string[] = [
-  'Andheri',
-  'Bandra',
-  'Borivali',
-  'Goregaon',
-  'Malad',
-  'Powai',
-  'Dadar',
-  'Lower Parel',
-  'Chembur',
-  'Ghatkopar',
-  'Mulund',
-  'Navi Mumbai',
-  'Thane',
-];
-
-export const PUNE_LOCALITIES: string[] = [
-  'Baner',
-  'Wakad',
-  'Hinjewadi',
-  'Aundh',
-  'Kothrud',
-  'Viman Nagar',
-  'Kharadi',
-  'Hadapsar',
-  'Koregaon Park',
-  'Shivajinagar',
-  'Pimpri-Chinchwad',
-  'Magarpatta',
-];
+export const MUMBAI_LOCALITIES: string[] = CANONICAL_MUMBAI_LOCALITIES;
+export const PUNE_LOCALITIES: string[] = CANONICAL_PUNE_LOCALITIES;
 
 export interface ParserContext {
   currentCity?: City;
@@ -529,6 +506,15 @@ export function parseSearchIntent(
         if (MUMBAI_LOCALITIES.includes(area)) detectedCity = 'Mumbai';
         if (PUNE_LOCALITIES.includes(area)) detectedCity = 'Pune';
       }
+    }
+  }
+
+  // Fallback to alias and multilingual resolution via resolveLocality for specific areas
+  if (detectedAreas.length === 0 && !/^\s*(pune|mumbai|poona|bombay)\s*$/i.test(q)) {
+    const resolved = resolveLocality(q);
+    if (resolved && resolved.canonicalName !== 'Pune City' && resolved.canonicalName !== 'Mumbai City and Mumbai Suburbs') {
+      detectedAreas.push(resolved.canonicalName);
+      if (!detectedCity) detectedCity = resolved.city;
     }
   }
 
