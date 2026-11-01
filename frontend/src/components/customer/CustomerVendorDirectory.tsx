@@ -376,7 +376,7 @@ export const CustomerVendorDirectory: React.FC<CustomerVendorDirectoryProps> = (
                   <div className="flex items-center gap-3 mt-3 text-xs">
                     <div className="flex items-center gap-1 font-bold text-navy">
                       <Star className="size-3.5 fill-gold text-gold" />
-                      <span>{vendor.rating.toFixed(1)}</span>
+                      <span>{(vendor.rating || 4.7).toFixed(1)}</span>
                     </div>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-muted-foreground">

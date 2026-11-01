@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { City, AvailabilityStatus, Vendor } from '../types/vendor';
 import { WeddingEvent, TimelineTask } from '../types/event';
 import { Inquiry, Quotation, Booking, SimulatedPayment } from '../types/booking';

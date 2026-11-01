@@ -259,7 +259,7 @@ export const EventOrganizerDirectory: React.FC<EventOrganizerDirectoryProps> = (
                 <div className="flex items-center gap-3 mt-3 pt-3 border-t text-xs">
                   <div className="flex items-center gap-1 font-bold text-navy">
                     <Star className="size-3.5 fill-gold text-gold" />
-                    <span>{organizer.rating.toFixed(1)}</span>
+                    <span>{(organizer.rating || 4.8).toFixed(1)}</span>
                   </div>
                   <span className="text-muted-foreground">·</span>
                   <span className="text-muted-foreground">
