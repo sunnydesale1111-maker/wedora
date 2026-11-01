@@ -356,8 +356,8 @@ export const CustomerBookingsAndChecklist: React.FC<CustomerBookingsAndChecklist
           </form>
         )}
 
-        {/* Checklist Task Items */}
-        <div className="space-y-2">
+        {/* Checklist Task Items - Contained Scrollable Container */}
+        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1.5 overscroll-contain scrollbar-thin scrollbar-thumb-gold/30 hover:scrollbar-thumb-gold/50">
           {eventTasks.length > 0 ? (
             eventTasks.map((task) => {
               const isDone = task.status === 'COMPLETED';
@@ -409,43 +409,45 @@ export const CustomerBookingsAndChecklist: React.FC<CustomerBookingsAndChecklist
         </div>
       </div>
 
-      {/* 4. Bookings & Payments Table */}
+      {/* 4. Bookings & Payments Table - Contained Scrollable Container */}
       <Panel title="Confirmed Vendor Contracts & Advances">
         {eventBookings.length > 0 ? (
-          <SimpleTable
-            head={['Vendor / Organizer', 'Category', 'Event Date', 'Agreed Total', 'Paid to Date', 'Balance', 'Action']}
-            rows={eventBookings.map((b) => {
-              const paid = b.paidAmount || 0;
-              const balance = Math.max(0, b.agreedAmount - paid);
-              return [
-                <strong key={b.id} className="text-navy">{b.vendorBusinessName}</strong>,
-                b.serviceCategory,
-                b.eventDate,
-                `₹${b.agreedAmount.toLocaleString('en-IN')}`,
-                <span key={b.id} className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                  ₹{paid.toLocaleString('en-IN')}
-                </span>,
-                <span key={b.id} className={balance > 0 ? 'text-amber-700 font-semibold' : 'text-muted-foreground'}>
-                  ₹{balance.toLocaleString('en-IN')}
-                </span>,
-                balance > 0 ? (
-                  <Button
-                    key={b.id}
-                    size="sm"
-                    variant="gold"
-                    onClick={() => setPayBooking(b)}
-                    className="text-xs font-semibold py-1"
-                  >
-                    Make Demo Payment
-                  </Button>
-                ) : (
-                  <span key={b.id} className="text-xs text-emerald-700 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="size-3" /> Fully Paid
-                  </span>
-                ),
-              ];
-            })}
-          />
+          <div className="max-h-[320px] overflow-y-auto pr-1 overscroll-contain scrollbar-thin scrollbar-thumb-gold/30 hover:scrollbar-thumb-gold/50">
+            <SimpleTable
+              head={['Vendor / Organizer', 'Category', 'Event Date', 'Agreed Total', 'Paid to Date', 'Balance', 'Action']}
+              rows={eventBookings.map((b) => {
+                const paid = b.paidAmount || 0;
+                const balance = Math.max(0, b.agreedAmount - paid);
+                return [
+                  <strong key={b.id} className="text-navy">{b.vendorBusinessName}</strong>,
+                  b.serviceCategory,
+                  b.eventDate,
+                  `₹${b.agreedAmount.toLocaleString('en-IN')}`,
+                  <span key={b.id} className="text-emerald-700 dark:text-emerald-400 font-semibold">
+                    ₹{paid.toLocaleString('en-IN')}
+                  </span>,
+                  <span key={b.id} className={balance > 0 ? 'text-amber-700 font-semibold' : 'text-muted-foreground'}>
+                    ₹{balance.toLocaleString('en-IN')}
+                  </span>,
+                  balance > 0 ? (
+                    <Button
+                      key={b.id}
+                      size="sm"
+                      variant="gold"
+                      onClick={() => setPayBooking(b)}
+                      className="text-xs font-semibold py-1"
+                    >
+                      Make Demo Payment
+                    </Button>
+                  ) : (
+                    <span key={b.id} className="text-xs text-emerald-700 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="size-3" /> Fully Paid
+                    </span>
+                  ),
+                ];
+              })}
+            />
+          </div>
         ) : (
           <div className="text-center py-8 space-y-2">
             <p className="text-xs text-muted-foreground">
@@ -460,27 +462,29 @@ export const CustomerBookingsAndChecklist: React.FC<CustomerBookingsAndChecklist
         )}
       </Panel>
 
-      {/* 5. Simulated Transaction Ledger */}
+      {/* 5. Simulated Transaction Ledger - Contained Scrollable Container */}
       <Panel title="Simulated Transaction Ledger">
         {eventPayments.length > 0 ? (
-          <SimpleTable
-            head={['Reference', 'Payee', 'Amount', 'Payment Purpose', 'Simulation Badge', 'Date']}
-            rows={eventPayments.map((p) => [
-              <span key={p.id} className="font-mono text-[11px] text-plum font-semibold">
-                {p.transactionRef}
-              </span>,
-              p.payeeName,
-              `₹${p.amount.toLocaleString('en-IN')}`,
-              p.paymentPurpose,
-              <span
-                key={p.id}
-                className="text-[10px] text-gold font-bold uppercase tracking-wider bg-gold-soft px-2 py-0.5 rounded-full border border-gold/30"
-              >
-                Demo Simulation
-              </span>,
-              new Date(p.createdAt).toLocaleDateString('en-IN'),
-            ])}
-          />
+          <div className="max-h-[280px] overflow-y-auto pr-1 overscroll-contain scrollbar-thin scrollbar-thumb-gold/30 hover:scrollbar-thumb-gold/50">
+            <SimpleTable
+              head={['Reference', 'Payee', 'Amount', 'Payment Purpose', 'Simulation Badge', 'Date']}
+              rows={eventPayments.map((p) => [
+                <span key={p.id} className="font-mono text-[11px] text-plum font-semibold">
+                  {p.transactionRef}
+                </span>,
+                p.payeeName,
+                `₹${p.amount.toLocaleString('en-IN')}`,
+                p.paymentPurpose,
+                <span
+                  key={p.id}
+                  className="text-[10px] text-gold font-bold uppercase tracking-wider bg-gold-soft px-2 py-0.5 rounded-full border border-gold/30"
+                >
+                  Demo Simulation
+                </span>,
+                new Date(p.createdAt).toLocaleDateString('en-IN'),
+              ])}
+            />
+          </div>
         ) : (
           <p className="text-xs text-muted-foreground text-center py-6">
             No simulated payments recorded yet. Click "Make Demo Payment" on any active booking above to test payment ledger tracking.

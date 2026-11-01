@@ -16,7 +16,6 @@ import {
   Bookmark,
   Users,
   DollarSign,
-  UserCheck,
 } from "lucide-react";
 import {
   DashboardShell,
@@ -79,13 +78,6 @@ function CustomerPortal() {
       Boolean(activeEvent.isVenueProvisional) ||
       activeEvent.venueName?.toLowerCase().includes("not finalized"));
 
-  // Customer Profile Identifiers
-  const isProfileRohil =
-    session.email?.toLowerCase().includes("rohil") ||
-    session.email?.toLowerCase().includes("rohan") ||
-    session.email?.toLowerCase().includes("customer@weddingorchestrator");
-  const isProfileAniket = session.email?.toLowerCase().includes("aniket");
-
   return (
     <DashboardShell
       nav={nav}
@@ -95,58 +87,6 @@ function CustomerPortal() {
       user={session.name || "Customer User"}
     >
       <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
-        {/* Customer Profile Switcher Banner */}
-        <div className="rounded-2xl bg-secondary/80 border border-border p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-2 text-navy">
-            <UserCheck className="size-4 text-gold shrink-0" />
-            <span>
-              Active Profile:{" "}
-              <strong className="text-plum">
-                {session.name} ({session.email})
-              </strong>
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] text-muted-foreground font-medium mr-1">Switch:</span>
-            <button
-              onClick={() => loginAsRole("CUSTOMER", "rohil")}
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition border ${
-                isProfileRohil
-                  ? "bg-plum text-gold border-gold shadow-xs"
-                  : "bg-card text-muted-foreground hover:text-navy border-border"
-              }`}
-            >
-              Profile A: Rohil (Demo)
-            </button>
-            <button
-              onClick={() => loginAsRole("CUSTOMER", "aniket")}
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition border ${
-                isProfileAniket
-                  ? "bg-plum text-gold border-gold shadow-xs"
-                  : "bg-card text-muted-foreground hover:text-navy border-border"
-              }`}
-            >
-              Profile B: Aniket (Fresh)
-            </button>
-            <button
-              onClick={() =>
-                loginAsRole("CUSTOMER", {
-                  name: "New Guest Customer",
-                  email: `newcustomer-${Date.now()}@wedora.com`,
-                })
-              }
-              className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold transition border ${
-                !isProfileRohil && !isProfileAniket
-                  ? "bg-plum text-gold border-gold shadow-xs"
-                  : "bg-card text-muted-foreground hover:text-navy border-border"
-              }`}
-            >
-              Profile C: Blank New
-            </button>
-          </div>
-        </div>
-
         {/* If Customer has NO registered event -> Launch Event Onboarding Journey */}
         {!activeEvent ? (
           <CustomerEventOnboarding

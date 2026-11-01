@@ -32,7 +32,7 @@ export function DashboardShell({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-hidden bg-gradient-plum text-sidebar-foreground transition-transform lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-hidden bg-gradient-plum text-sidebar-foreground transition-transform lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:translate-x-0",
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >

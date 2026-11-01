@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   ArrowRight,
   CalendarCheck,
@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   MapPin,
   ChevronDown,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo, Mandala } from "@/components/brand";
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Discover 100 verified vendors across Mumbai and Pune. Check factual date availability, coordinate bookings, manage simulated payments, and organize every wedding milestone.",
+          "Discover 100+ verified vendors across Mumbai and Pune. Check factual date availability, coordinate bookings, manage simulated payments, and organize every wedding milestone.",
       },
       {
         property: "og:title",
@@ -72,54 +73,79 @@ const steps = [
   { n: "03", title: "Book & coordinate", text: "Accept quotations, record milestone advances, and track your timeline." },
 ];
 
-const roles = [
+const customerStories = [
   {
-    icon: Store,
-    title: "Vendors",
-    text: "List services, manage your availability calendar, answer quotation inquiries, and track bookings.",
+    customerName: "Rohan Kulkarni & Priya Deshmukh",
+    eventType: "Grand Wedding & Reception",
+    location: "Baner, Pune",
+    rating: 5,
+    highlight: "₹25L Budget · 500 Guests",
+    quote:
+      "Finding caterers and decorators who were actually available on 15 Dec in Baner used to take weeks of phone calls. Wedora verified availability in seconds and the milestone payments kept everything transparent.",
   },
   {
-    icon: Users,
-    title: "Professional Planners",
-    text: "Manage multiple client weddings, switch event contexts, and coordinate all vendor contracts.",
+    customerName: "Aditya Merchant & Sanjana Shah",
+    eventType: "Sangeet Gala & Seafront Ceremony",
+    location: "Bandra, Mumbai",
+    rating: 5,
+    highlight: "₹48L Budget · 750 Guests",
+    quote:
+      "Wedora's organizer directory connected us with top-tier planners in Bandra. Managing sound, lighting, and guest accommodation in one unified timeline made our 750-guest celebration completely stress-free.",
   },
   {
-    icon: Heart,
-    title: "Individual Customers",
-    text: "Choose between planning your celebration yourself or hiring a professional event organizer.",
+    customerName: "Tanvi & Mihir Joshi",
+    eventType: "Traditional Vivah & Mandap",
+    location: "Kothrud, Pune",
+    rating: 5,
+    highlight: "₹18L Budget · 350 Guests",
+    quote:
+      "The AI assistant understood our exact Marathi rituals and recommended Peshwa-themed decorators and candid cinematographers in Kothrud with verified past event proof. Spotless coordination!",
   },
 ];
 
-const availabilityPreview = [
+const visualJourney = [
   {
-    name: "Royal Feast Catering & Hospitality",
-    cat: "Catering · Pune (Baner)",
-    status: "Available",
-    tone: "bg-success-soft text-success",
+    step: "01",
+    title: "Create Your Event",
+    icon: CalendarCheck,
+    text: "Set your date, guest count, city (Mumbai or Pune), and customized budget milestones.",
   },
   {
-    name: "Elegance Floral & Mandap Decor",
-    cat: "Decoration · Pune (Wakad)",
-    status: "Available",
-    tone: "bg-success-soft text-success",
+    step: "02",
+    title: "Discover Vendors",
+    icon: Search,
+    text: "Explore verified caterers, decorators, venues, and photographers with live calendar availability.",
   },
   {
-    name: "Symphony Signature Weddings",
-    cat: "Event Organizers · Mumbai (Bandra)",
-    status: "Available",
-    tone: "bg-success-soft text-success",
+    step: "03",
+    title: "Shortlist & Book",
+    icon: CreditCard,
+    text: "Compare provisional quotations, communicate directly, and confirm contracts with milestone advances.",
   },
   {
-    name: "The Grand Marine Pavilion",
-    cat: "Accommodation · Mumbai (Lower Parel)",
-    status: "Available",
-    tone: "bg-success-soft text-success",
+    step: "04",
+    title: "Celebrate",
+    icon: Heart,
+    text: "Follow your live event day timeline, coordinate vendors seamlessly, and celebrate without surprises.",
   },
 ];
 
 function Landing() {
   const { city, changeCity } = useDemoSession();
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
+  const [isProDropdownOpen, setIsProDropdownOpen] = useState(false);
+  const proDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (proDropdownRef.current && !proDropdownRef.current.contains(event.target as Node)) {
+        setIsProDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div className="overflow-x-hidden bg-background">
@@ -129,7 +155,8 @@ function Landing() {
         <nav className="hidden gap-8 text-sm text-muted-foreground md:flex items-center">
           <a href="#features" className="hover:text-plum transition">Features</a>
           <a href="#how" className="hover:text-plum transition">How it works</a>
-          <a href="#roles" className="hover:text-plum transition">Who it's for</a>
+          <a href="#journey" className="hover:text-plum transition">Planning Journey</a>
+          <a href="#stories" className="hover:text-plum transition">Customer Stories</a>
           {/* City Selector in Landing Header */}
           <button
             onClick={() => setIsCityModalOpen(true)}
@@ -141,7 +168,7 @@ function Landing() {
           </button>
         </nav>
         <Button asChild variant="hero">
-          <Link to="/get-started">Get Started</Link>
+          <Link to="/get-started" search={{ role: "CUSTOMER" }}>Get Started</Link>
         </Button>
       </header>
 
@@ -157,23 +184,81 @@ function Landing() {
             <em className="text-navy font-normal">One Intelligent</em> Platform.
           </h1>
           <p className="mt-6 max-w-lg text-lg text-muted-foreground leading-relaxed">
-            Discover 100 verified vendors in Mumbai and Pune. Check factual date availability, compare 90-day transaction proof, and coordinate every wedding milestone seamlessly.
+            Discover verified vendors across Mumbai and Pune. Check factual date availability, compare performance proof, and coordinate every wedding milestone seamlessly.
           </p>
-          <div className="mt-8 flex flex-wrap gap-4">
+
+          {/* Hero CTAs */}
+          <div className="mt-8 flex flex-wrap items-center gap-4">
             <Button asChild variant="hero" size="xl">
-              <Link to="/get-started">
+              <Link to="/get-started" search={{ role: "CUSTOMER" }}>
                 Get Started <ArrowRight className="size-4 ml-1" />
               </Link>
             </Button>
-            <Button asChild variant="soft" size="xl">
-              <a href="#preview">Explore Vendor Discovery</a>
-            </Button>
+
+            {/* Join as a Professional with Dual Popover */}
+            <div className="relative" ref={proDropdownRef}>
+              <Button
+                type="button"
+                variant="soft"
+                size="xl"
+                onClick={() => setIsProDropdownOpen(!isProDropdownOpen)}
+                className="flex items-center gap-2 border border-gold/40 hover:bg-gold-soft text-plum font-semibold"
+              >
+                <span>Join as a Professional</span>
+                <ChevronDown className={`size-4 text-gold transition-transform duration-200 ${isProDropdownOpen ? "rotate-180" : ""}`} />
+              </Button>
+
+              {isProDropdownOpen && (
+                <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 rounded-2xl bg-card p-2 shadow-float border border-gold/40 z-30 animate-rise">
+                  <div className="px-3 py-2 border-b border-border text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Choose Your Professional Role
+                  </div>
+                  <Link
+                    to="/get-started"
+                    search={{ role: "VENDOR" }}
+                    onClick={() => setIsProDropdownOpen(false)}
+                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-gold-soft/50 transition text-left group"
+                  >
+                    <div className="p-2 rounded-lg bg-gold/15 text-gold shrink-0 group-hover:scale-105 transition">
+                      <Store className="size-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-plum group-hover:text-gold transition">
+                        I'm a Vendor
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        List services, manage calendar availability & quotations
+                      </div>
+                    </div>
+                  </Link>
+                  <Link
+                    to="/get-started"
+                    search={{ role: "PLANNER" }}
+                    onClick={() => setIsProDropdownOpen(false)}
+                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-gold-soft/50 transition text-left group"
+                  >
+                    <div className="p-2 rounded-lg bg-gold/15 text-gold shrink-0 group-hover:scale-105 transition">
+                      <Users className="size-4" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-plum group-hover:text-gold transition">
+                        I'm an Event Organizer
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Manage client events, vendor contracts & timeline execution
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
+
           <div className="mt-10 flex gap-10 text-sm">
             {[
-              ["100", "Fictional Vendors"],
+              ["200+", "Verified Profiles"],
               ["2 Cities", "Mumbai & Pune"],
-              ["12 Categories", "Catering to Planners"],
+              ["13 Categories", "Catering to Venues"],
             ].map(([a, b]) => (
               <div key={b}>
                 <div className="font-display text-2xl font-bold text-plum">{a}</div>
@@ -205,43 +290,65 @@ function Landing() {
         </div>
       </section>
 
-      {/* AI Discovery preview */}
-      <section id="preview" className="bg-gradient-plum py-24 text-primary-foreground relative">
+      {/* Customer Stories & Reviews */}
+      <section id="stories" className="bg-gradient-plum py-24 text-primary-foreground relative">
         <div className="relative mx-auto max-w-7xl px-6">
           <Mandala className="absolute -right-24 -top-24 size-80 text-gold/20 pointer-events-none" />
           <p className="text-center text-xs uppercase tracking-[0.3em] text-gold font-semibold">
-            AI Vendor Discovery — Demo Mode
+            Customer Stories & Reviews
           </p>
-          <h2 className="mx-auto mt-4 max-w-2xl text-center text-4xl md:text-5xl font-display">
-            Ask once. See who's truly available.
+          <h2 className="mx-auto mt-4 max-w-2xl text-center text-4xl md:text-5xl font-display font-semibold">
+            Real Couples. Flawless Celebrations.
           </h2>
-          <div className="relative mx-auto mt-14 max-w-5xl rounded-3xl bg-card p-6 text-card-foreground shadow-float border border-gold/40">
-            <div className="flex items-center gap-3 rounded-full border bg-background px-5 py-3 text-sm">
-              <Sparkles className="size-4 text-gold shrink-0" />
-              <span className="text-muted-foreground text-xs sm:text-sm">
-                "Find caterers in Pune for 500 guests on 15 Dec around Baner and Wakad"
-              </span>
-            </div>
-            <div className="mt-6 grid gap-3 md:grid-cols-2">
-              {availabilityPreview.map((v) => (
-                <div key={v.name} className="flex items-center justify-between rounded-2xl border p-4 bg-secondary/40">
-                  <div>
-                    <div className="font-semibold text-navy text-sm">{v.name}</div>
-                    <div className="text-xs text-muted-foreground">{v.cat}</div>
+          <p className="mx-auto mt-3 max-w-xl text-center text-sm text-primary-foreground/80">
+            See how couples in Mumbai and Pune planned with live calendar verification, honest reviews, and simulated milestone advances.
+          </p>
+
+          <div className="mt-14 grid gap-6 md:grid-cols-3">
+            {customerStories.map((s, idx) => (
+              <div
+                key={idx}
+                className="rounded-3xl bg-card p-6 text-card-foreground shadow-float border border-gold/40 flex flex-col justify-between hover:-translate-y-1 transition duration-200"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <span className="text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 px-2.5 py-0.5 rounded-full">
+                      Verified Customer Story (Demo Experience)
+                    </span>
+                    <div className="flex items-center gap-0.5">
+                      {[...Array(s.rating)].map((_, i) => (
+                        <Star key={i} className="size-3.5 fill-gold text-gold" />
+                      ))}
+                    </div>
                   </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${v.tone}`}>
-                    {v.status}
-                  </span>
+
+                  <p className="text-xs sm:text-sm text-muted-foreground italic leading-relaxed">
+                    "{s.quote}"
+                  </p>
                 </div>
-              ))}
-            </div>
-            <div className="mt-6 pt-4 border-t text-center">
-              <Button asChild variant="hero">
-                <Link to="/get-started">
-                  Launch Interactive Discovery <ArrowRight className="size-4 ml-1" />
-                </Link>
-              </Button>
-            </div>
+
+                <div className="mt-6 pt-4 border-t border-border">
+                  <div className="font-display font-bold text-plum text-base">
+                    {s.customerName}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <MapPin className="size-3 text-gold shrink-0" />
+                    <span>{s.eventType} · {s.location}</span>
+                  </div>
+                  <div className="mt-2 text-[11px] font-semibold text-navy bg-gold-soft/60 px-2 py-0.5 rounded inline-block">
+                    {s.highlight}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-12 text-center">
+            <Button asChild variant="hero" size="xl">
+              <Link to="/get-started" search={{ role: "CUSTOMER" }}>
+                Start Your Planning Journey <ArrowRight className="size-4 ml-1" />
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -249,7 +356,7 @@ function Landing() {
       {/* Features */}
       <section id="features" className="mx-auto max-w-7xl px-6 py-24">
         <div className="gold-rule mx-auto mb-10 max-w-md" />
-        <h2 className="text-center text-4xl text-plum font-display">Everything a wedding needs to run</h2>
+        <h2 className="text-center text-4xl text-plum font-display font-semibold">Everything a wedding needs to run</h2>
         <div className="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           {features.map((f) => (
             <div key={f.title} className="rounded-3xl border bg-card p-7 shadow-soft transition hover:-translate-y-1">
@@ -275,7 +382,7 @@ function Landing() {
         />
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-gold font-semibold">How it works</p>
-          <h2 className="mt-3 text-4xl text-plum font-display">From first idea to final vidaai</h2>
+          <h2 className="mt-3 text-4xl text-plum font-display font-semibold">From first idea to final vidaai</h2>
           <div className="mt-10 space-y-8">
             {steps.map((s) => (
               <div key={s.n} className="flex gap-6">
@@ -290,25 +397,41 @@ function Landing() {
         </div>
       </section>
 
-      {/* Roles */}
-      <section id="roles" className="bg-secondary/70 py-24">
+      {/* Planning Journey (Replaces Mandap section) */}
+      <section id="journey" className="bg-secondary/70 py-24">
         <div className="mx-auto max-w-7xl px-6">
-          <h2 className="text-center text-4xl text-plum font-display">Built for everyone at the mandap</h2>
-          <div className="mt-14 grid gap-6 md:grid-cols-3">
-            {roles.map((r) => (
-              <div key={r.title} className="arch border bg-card px-8 pb-10 pt-16 text-center shadow-soft">
-                <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-gradient-plum text-gold">
-                  <r.icon className="size-6" />
+          <p className="text-center text-xs uppercase tracking-[0.3em] text-gold font-semibold">
+            Visual Planning Journey
+          </p>
+          <h2 className="mt-3 text-center text-4xl text-plum font-display font-semibold">
+            From Your First Idea to Your Perfect Event
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-center text-sm text-muted-foreground">
+            A clear four-stage visual workflow designed to eliminate planning stress, duplicate bookings, and hidden fees.
+          </p>
+
+          <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            {visualJourney.map((j) => (
+              <div
+                key={j.step}
+                className="arch border bg-card px-6 pb-8 pt-12 text-center shadow-soft hover:shadow-float hover:border-gold/50 transition duration-200 relative group"
+              >
+                <div className="absolute top-4 right-5 text-xs font-mono font-bold text-gold/60">
+                  {j.step}
                 </div>
-                <h3 className="mt-6 text-2xl font-display text-plum font-semibold">{r.title}</h3>
-                <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{r.text}</p>
+                <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-gradient-plum text-gold group-hover:scale-110 transition duration-200">
+                  <j.icon className="size-6" />
+                </div>
+                <h3 className="mt-6 text-xl font-display text-plum font-semibold">{j.title}</h3>
+                <p className="mt-3 text-xs text-muted-foreground leading-relaxed">{j.text}</p>
               </div>
             ))}
           </div>
+
           <div className="mt-12 text-center">
             <Button asChild variant="hero" size="xl">
-              <Link to="/get-started">
-                Choose your role <ArrowRight className="size-4 ml-1" />
+              <Link to="/get-started" search={{ role: "CUSTOMER" }}>
+                Plan Your Event Now <ArrowRight className="size-4 ml-1" />
               </Link>
             </Button>
           </div>

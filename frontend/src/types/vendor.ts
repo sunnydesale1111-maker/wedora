@@ -126,6 +126,9 @@ export interface Vendor {
   profileCreatedAt?: string;
   isActive?: boolean;
   isDemoData?: boolean;
+  isDemonstrationProfile?: boolean;
+  demonstrationNote?: string;
+  rating?: number;
   isNearbyCoverage?: boolean;
   nearbyCoverageNote?: string;
 }

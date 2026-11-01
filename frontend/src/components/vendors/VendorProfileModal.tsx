@@ -1,3 +1,4 @@
+import React, { useEffect } from 'react';
 import { Vendor } from '@/types/vendor';
 import {
   MapPin,
@@ -58,59 +59,84 @@ export function VendorProfileModal({
   const feedbackCount = vendor.verifiedCustomerFeedbackCount ?? (vendor.customerFeedback?.length || 0);
   const cancellations = vendor.vendorCausedCancellations ?? 0;
   const commitmentsMet = vendor.serviceCommitmentsMetPercent ?? 97;
+  const isDemonstrationData = vendor.isDemoData || vendor.isDemonstrationProfile;
+
+  // Prevent background page from scrolling while modal is open (single active scroll area)
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+    };
+  }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/50 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-      <div className="w-full max-w-3xl rounded-3xl bg-card p-6 sm:p-8 shadow-float border border-gold/40 relative animate-rise my-8 max-h-[90vh] overflow-y-auto">
-        <button
-          onClick={onClose}
-          className="absolute right-5 top-5 text-muted-foreground hover:text-foreground transition p-1.5 rounded-full hover:bg-secondary"
-          aria-label="Close"
-        >
-          <X className="size-5" />
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-hidden">
+      <div className="w-full max-w-3xl rounded-3xl bg-card shadow-float border border-gold/40 relative flex flex-col max-h-[88vh] overflow-hidden animate-rise">
+        {/* Modal Header */}
+        <div className="p-6 sm:p-8 pb-4 border-b border-gold/20 relative shrink-0 bg-card">
+          <button
+            onClick={onClose}
+            className="absolute right-5 top-5 text-muted-foreground hover:text-foreground transition p-1.5 rounded-full hover:bg-secondary"
+            aria-label="Close"
+          >
+            <X className="size-5" />
+          </button>
 
-        {/* Header */}
-        <div className="flex items-start gap-4">
-          <div className="flex size-16 items-center justify-center arch bg-gradient-plum text-gold font-display text-2xl shrink-0 shadow-soft">
-            {vendor.businessName[0]}
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs uppercase tracking-wider text-gold font-semibold">
-                {vendor.category}
-              </span>
-              <span className="text-[10px] font-mono bg-secondary px-2 py-0.5 rounded text-muted-foreground">
-                ID: {vendor.id}
-              </span>
-              <Status s={availabilityStatus} />
-              {isNewVendor && (
-                <span className="inline-flex items-center gap-1 text-[11px] bg-gold-soft text-navy px-2.5 py-0.5 rounded-full font-semibold border border-gold/40">
-                  <Sparkles className="size-3 text-gold" />
-                  New to Wedora
-                </span>
-              )}
+          <div className="flex items-start gap-4">
+            <div className="flex size-16 items-center justify-center arch bg-gradient-plum text-gold font-display text-2xl shrink-0 shadow-soft">
+              {vendor.businessName[0]}
             </div>
-            <h2 className="text-2xl sm:text-3xl font-display text-plum mt-1 font-semibold">
-              {vendor.businessName}
-            </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1 font-medium text-navy">
-                <MapPin className="size-3.5 text-gold shrink-0" />
-                {vendor.primaryCity} — {vendor.serviceableAreas.join(', ')}
-              </span>
-              {vendor.maximumGuestCapacity && (
-                <>
-                  <span className="text-muted">·</span>
-                  <span className="flex items-center gap-1 font-medium text-navy">
-                    <Users className="size-3.5 text-gold shrink-0" />
-                    Up to {vendor.maximumGuestCapacity} Guests
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wider text-gold font-semibold">
+                  {vendor.category}
+                </span>
+                <span className="text-[10px] font-mono bg-secondary px-2 py-0.5 rounded text-muted-foreground">
+                  ID: {vendor.id}
+                </span>
+                <Status s={availabilityStatus} />
+                {isDemonstrationData ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-2.5 py-0.5 rounded-full font-semibold border border-amber-300 dark:border-amber-800">
+                    Demonstration Profile (Demo Data)
                   </span>
-                </>
-              )}
+                ) : isNewVendor ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] bg-gold-soft text-navy px-2.5 py-0.5 rounded-full font-semibold border border-gold/40">
+                    <Sparkles className="size-3 text-gold" />
+                    New to Wedora
+                  </span>
+                ) : null}
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-display text-plum mt-1 font-semibold">
+                {vendor.businessName}
+              </h2>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1 font-medium text-navy">
+                  <MapPin className="size-3.5 text-gold shrink-0" />
+                  {vendor.primaryCity} — {vendor.serviceableAreas.join(', ')}
+                </span>
+                {vendor.maximumGuestCapacity && (
+                  <>
+                    <span className="text-muted">·</span>
+                    <span className="flex items-center gap-1 font-medium text-navy">
+                      <Users className="size-3.5 text-gold shrink-0" />
+                      Up to {vendor.maximumGuestCapacity} Guests
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Modal Body - Sole Contained Scroll Area */}
+        <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-6 overscroll-contain">
 
         {/* ================= SECTION 3: VENDOR PERFORMANCE & TRUST ================= */}
         <div className="my-6 rounded-2xl bg-secondary/80 p-5 border border-gold/30">
@@ -462,40 +488,41 @@ export function VendorProfileModal({
             Calendar status for <strong>{targetDate}</strong>: <strong className="text-plum">{availabilityStatus}</strong> (Confirmation required for contract lock).
           </span>
         </div>
+      </div>
 
-        {/* Footer Actions */}
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
-          <div className="text-xs text-muted-foreground">
-            Contact: {vendor.contactEmail || `contact@${vendor.id}.demo`}
-          </div>
-          <div className="flex items-center gap-2">
-            {onShortlist && (
-              <Button
-                variant={isShortlisted ? 'gold' : 'soft'}
-                size="sm"
-                className="text-xs"
-                onClick={() => onShortlist(vendor)}
-              >
-                {isShortlisted ? <Check className="size-3 mr-1" /> : null}
-                {isShortlisted ? 'Shortlisted ✓' : 'Add to Shortlist'}
-              </Button>
-            )}
-            <Button variant="ghost" size="sm" onClick={onClose}>
-              Close
-            </Button>
+      {/* Modal Footer Actions - Always accessible at bottom without extra scrolling */}
+      <div className="p-4 sm:p-6 border-t border-border bg-card/95 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="text-xs text-muted-foreground">
+          Contact: {vendor.contactEmail || `contact@${vendor.id}.demo`}
+        </div>
+        <div className="flex items-center gap-2">
+          {onShortlist && (
             <Button
-              variant="hero"
+              variant={isShortlisted ? 'gold' : 'soft'}
               size="sm"
-              onClick={() => {
-                onClose();
-                onRequestQuote(vendor);
-              }}
+              className="text-xs"
+              onClick={() => onShortlist(vendor)}
             >
-              Request Quotation
+              {isShortlisted ? <Check className="size-3 mr-1" /> : null}
+              {isShortlisted ? 'Shortlisted ✓' : 'Add to Shortlist'}
             </Button>
-          </div>
+          )}
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            Close
+          </Button>
+          <Button
+            variant="hero"
+            size="sm"
+            onClick={() => {
+              onClose();
+              onRequestQuote(vendor);
+            }}
+          >
+            Request Quotation
+          </Button>
         </div>
       </div>
     </div>
+  </div>
   );
 }

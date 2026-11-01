@@ -26,6 +26,9 @@ export const Route = createFileRoute("/get-started")({
       },
     ],
   }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    role: (search.role as UserRole) || undefined,
+  }),
   component: GetStarted,
 });
 
@@ -33,17 +36,27 @@ type OnboardingStep = "root" | "planning" | "auth_form";
 
 function GetStarted() {
   const navigate = useNavigate();
+  const search = Route.useSearch();
   const { loginAsRole } = useDemoSession();
 
-  const [step, setStep] = useState<OnboardingStep>("root");
-  const [selectedRole, setSelectedRole] = useState<UserRole>("PLANNER");
+  const initialRole: UserRole = search.role || "PLANNER";
+  const [step, setStep] = useState<OnboardingStep>(search.role ? "auth_form" : "root");
+  const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
 
   // Form fields
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState(() => {
+    if (initialRole === "CUSTOMER") return "Rohil Kulkarni (Groom)";
+    if (initialRole === "VENDOR") return "Royal Feast Catering & Hospitality";
+    return "Aditi Sharma (Lead Planner)";
+  });
+  const [email, setEmail] = useState(() => {
+    if (initialRole === "CUSTOMER") return "rohil@kulkarni.com";
+    if (initialRole === "VENDOR") return "vendor1@royalfeast.com";
+    return "planner@weddingorchestrator.com";
+  });
+  const [password, setPassword] = useState("Demo@12345");
+  const [confirmPassword, setConfirmPassword] = useState("Demo@12345");
 
   const handleSelectPlanningRole = (role: "PLANNER" | "CUSTOMER") => {
     setSelectedRole(role);

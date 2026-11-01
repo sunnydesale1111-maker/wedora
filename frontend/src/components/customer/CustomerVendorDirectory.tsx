@@ -39,11 +39,11 @@ interface CustomerVendorDirectoryProps {
 const CATEGORIES = [
   { label: 'All Vendors', value: 'ALL' },
   { label: 'Catering & Food', value: 'Catering and Food Services' },
-  { label: 'Photography & Film', value: 'Photography and Cinematography' },
-  { label: 'Decor & Flowers', value: 'Floral and Decor Design' },
-  { label: 'Venues & Halls', value: 'Banquet Halls and Venues' },
-  { label: 'DJ & Sound', value: 'Sound and DJ Production' },
-  { label: 'Makeup & Styling', value: 'Bridal Makeup and Styling' },
+  { label: 'Photography & Film', value: 'Photography and Videography' },
+  { label: 'Decor & Flowers', value: 'Decoration Services' },
+  { label: 'Venues & Halls', value: 'Wedding Lawns and Venues' },
+  { label: 'DJ & Sound', value: 'DJ and Sound Systems' },
+  { label: 'Makeup & Styling', value: 'Makeup and Mehendi Artists' },
 ];
 
 export const CustomerVendorDirectory: React.FC<CustomerVendorDirectoryProps> = ({
@@ -119,7 +119,7 @@ export const CustomerVendorDirectory: React.FC<CustomerVendorDirectoryProps> = (
       city: activeEvent.city,
       category: activeCat,
       eventDate: voiceQueryFilter.date || activeEvent.eventDate,
-      limit: 12,
+      limit: 24,
     });
 
     // Filter out organizer categories (which belong to the separate organizer directory)
@@ -335,9 +335,16 @@ export const CustomerVendorDirectory: React.FC<CustomerVendorDirectoryProps> = (
                 {/* Top section: Category, Verified & Bookmark */}
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-gold bg-gold/15 px-2 py-0.5 rounded-full">
-                      {vendor.category}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-gold bg-gold/15 px-2 py-0.5 rounded-full">
+                        {vendor.category}
+                      </span>
+                      {(vendor.isDemoData || vendor.isDemonstrationProfile) && (
+                        <span className="text-[10px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded-full">
+                          Demonstration Profile (Demo Data)
+                        </span>
+                      )}
+                    </div>
 
                     <button
                       onClick={() => toggleShortlist(vendor, activeEvent.id, activeEvent.estimatedBudget)}

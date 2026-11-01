@@ -34,22 +34,13 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [detectedLang, setDetectedLang] = useState<VoiceLanguage>('en');
 
-  const isProvisional =
-    activeEvent.venueStatus === 'NOT_FINALIZED' ||
-    Boolean(activeEvent.isVenueProvisional) ||
-    activeEvent.venueName?.toLowerCase().includes('not finalized');
-
-  const initialGreeting = `Hello ${activeEvent.clientName || 'there'}! I am your AI Wedding Vendor Assistant for ${activeEvent.eventName} on ${activeEvent.eventDate} in ${activeEvent.area || activeEvent.city}. Ask me in English, Hindi, or Marathi to discover caterers, photographers, decor, check live date availability, or calculate provisional quotations.${
-    isProvisional ? ' (Venue is not finalized yet: recommendations are provisional).' : ''
-  }`;
+  const initialGreeting = 'Hello! How can I help you find vendors for your event today?';
 
   const [lastResponse, setLastResponse] = useState<string>(initialGreeting);
 
   // Sync greeting when active event parameters change
   useEffect(() => {
-    setLastResponse(
-      `Ready to help with ${activeEvent.eventName} on ${activeEvent.eventDate} in ${activeEvent.area || activeEvent.city}. Ask me in English, Hindi, or Marathi to discover vendors, check availability, or calculate provisional budgets.`
-    );
+    setLastResponse('Ready to help find vendors for your event.');
   }, [activeEvent.id, activeEvent.eventName, activeEvent.eventDate, activeEvent.area, activeEvent.city]);
 
   const recognitionRef = useRef<any>(null);
@@ -151,29 +142,6 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
     }
   };
 
-  const promptChips = [
-    {
-      label: `Top caterers in ${activeEvent.area || activeEvent.city}`,
-      text: `Show me top rated caterers in ${activeEvent.area || activeEvent.city}`,
-    },
-    {
-      label: `Photographers available on ${activeEvent.eventDate}`,
-      text: `Find photographers available on ${activeEvent.eventDate} in ${activeEvent.city}`,
-    },
-    {
-      label: 'Decorators & banquet halls',
-      text: `Show wedding decorators and banquet halls in ${activeEvent.area || activeEvent.city}`,
-    },
-    {
-      label: 'कॅटरर्स आणि सजावट (Marathi)',
-      text: `${activeEvent.city} मधील कॅटरर्स आणि सजावट वेंडर्स दाखवा`,
-    },
-    {
-      label: 'फोटोग्राफर उपलब्धता (Hindi)',
-      text: `${activeEvent.eventDate} के लिए फोटोग्राफर उपलब्ध हैं क्या?`,
-    },
-  ];
-
   return (
     <div className="rounded-3xl border border-gold/30 bg-gradient-to-br from-card via-card to-gold-soft/20 p-5 sm:p-6 shadow-soft space-y-4 animate-rise min-w-0 max-w-full">
       {/* Header Bar */}
@@ -184,15 +152,13 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
           </div>
           <div>
             <h3 className="font-display font-bold text-plum text-base sm:text-lg flex items-center gap-2">
-              Customer AI Voice Assistant
+              Customer AI Assistant
               <span className="text-[10px] font-bold uppercase tracking-wider text-gold bg-gold/15 px-2 py-0.5 rounded-full">
                 Multilingual
               </span>
             </h3>
             <p className="text-xs text-muted-foreground">
-              Event Context:{' '}
-              <strong className="text-navy">{activeEvent.eventName}</strong> ({activeEvent.city}, {activeEvent.eventDate}
-              {activeEvent.area ? ` · ${activeEvent.area}` : ''})
+              Find the right vendors for your event.
             </p>
           </div>
         </div>
@@ -214,8 +180,8 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
       </div>
 
       {/* Assistant Response Bubble */}
-      <div className="rounded-2xl bg-gold-soft/40 border border-gold/30 p-4 transition-all">
-        <div className="flex items-start gap-3">
+      <div className="rounded-2xl bg-gold-soft/40 border border-gold/30 p-4 transition-all min-h-[52px] flex items-center">
+        <div className="flex items-start gap-3 w-full">
           <div className="size-2 rounded-full bg-gold mt-1.5 shrink-0 animate-pulse" />
           <div className="flex-1 space-y-1">
             <p className="text-xs sm:text-sm font-medium text-plum leading-relaxed">
@@ -228,25 +194,6 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
             )}
           </div>
         </div>
-      </div>
-
-      {/* Suggested Quick Prompt Chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
-        <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold shrink-0 mr-1">
-          Try asking:
-        </span>
-        {promptChips.map((chip, idx) => (
-          <button
-            key={idx}
-            onClick={() => {
-              setInputText(chip.text);
-              handleExecute(chip.text);
-            }}
-            className="shrink-0 px-2.5 py-1 rounded-full bg-secondary hover:bg-gold-soft/60 hover:text-navy border border-border text-[11px] font-medium transition text-muted-foreground"
-          >
-            {chip.label}
-          </button>
-        ))}
       </div>
 
       {/* WhatsApp-style Input Bar */}

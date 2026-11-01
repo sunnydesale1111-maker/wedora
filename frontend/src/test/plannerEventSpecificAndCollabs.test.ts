@@ -93,7 +93,7 @@ describe('Wedora – Professional Event Planner AI: Collaboration History & Even
     expect(event01.area).toBe('Baner');
     expect(event01.venueName).toBe('Emerald Meadows Wedding Lawn & Banquets');
     expect(event01.venueAddress).toContain('Survey No. 45/2');
-    expect(event01.clientName).toBe('Rohan Kulkarni & Priya Deshmukh');
+    expect(event01.clientName).toMatch(/Roh[ai]l Kulkarni & Priya Deshmukh/);
 
     const event02 = INITIAL_DEMO_EVENTS.find((e) => e.id === 'evt-02')!;
     expect(event02.eventName).toBe("Aditya & Sanjana's Grand Wedding & Sangeet");

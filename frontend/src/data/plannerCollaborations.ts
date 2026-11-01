@@ -575,14 +575,26 @@ export function getRecommendedVendorsForPlanner(filter: {
   const excluded = new Set((filter.excludeVendorIds || []).map((id) => id.toLowerCase()));
   const limit = filter.limit || 8;
 
+  const matchesCategory = (vendorCat: string, queryCat: string): boolean => {
+    if (!queryCat) return true;
+    const catLower = vendorCat.toLowerCase();
+    if (catLower.includes(queryCat) || queryCat.includes(catLower)) return true;
+    if (queryCat.includes('decor') && (catLower.includes('decor') || catLower.includes('flower'))) return true;
+    if (queryCat.includes('photo') && (catLower.includes('photo') || catLower.includes('video'))) return true;
+    if ((queryCat.includes('venue') || queryCat.includes('hall')) && (catLower.includes('venue') || catLower.includes('lawn') || catLower.includes('hotel') || catLower.includes('accommodation'))) return true;
+    if ((queryCat.includes('dj') || queryCat.includes('sound')) && (catLower.includes('dj') || catLower.includes('sound'))) return true;
+    if ((queryCat.includes('makeup') || queryCat.includes('styling')) && (catLower.includes('makeup') || catLower.includes('mehendi'))) return true;
+    if ((queryCat.includes('cater') || queryCat.includes('food')) && catLower.includes('cater')) return true;
+    return false;
+  };
+
   // 1. Exact locality matches
   const exactMatches = DEMO_VENDORS.filter((v) => {
     if (excluded.has(v.id.toLowerCase())) return false;
     if (searchCity && !v.primaryCity.toLowerCase().includes(searchCity)) return false;
 
-    if (searchCat) {
-      const catLower = v.category.toLowerCase();
-      if (!catLower.includes(searchCat) && !searchCat.includes(catLower)) return false;
+    if (searchCat && !matchesCategory(v.category, searchCat)) {
+      return false;
     }
 
     if (canonicalArea) {
@@ -632,10 +644,7 @@ export function getRecommendedVendorsForPlanner(filter: {
       const adjMatches = DEMO_VENDORS.filter((v) => {
         if (existingIds.has(v.id.toLowerCase())) return false;
         if (v.primaryCity.toLowerCase() !== resolved.city.toLowerCase()) return false;
-        if (searchCat) {
-          const catLower = v.category.toLowerCase();
-          if (!catLower.includes(searchCat) && !searchCat.includes(catLower)) return false;
-        }
+        if (searchCat && !matchesCategory(v.category, searchCat)) return false;
         return (
           v.serviceableAreas &&
           v.serviceableAreas.some((a) => a.toLowerCase() === adjNameLower)
@@ -656,18 +665,15 @@ export function getRecommendedVendorsForPlanner(filter: {
     }
   }
 
-  // 3. City-Wide fallback if still under 3
-  if (results.length < 3 && searchCity) {
+  // 3. City-Wide fallback if still under limit
+  if (results.length < limit && searchCity) {
     const existingIds = new Set(results.map((v) => v.id.toLowerCase()));
     excluded.forEach((id) => existingIds.add(id));
 
     const cityMatches = DEMO_VENDORS.filter((v) => {
       if (existingIds.has(v.id.toLowerCase())) return false;
       if (!v.primaryCity.toLowerCase().includes(searchCity)) return false;
-      if (searchCat) {
-        const catLower = v.category.toLowerCase();
-        if (!catLower.includes(searchCat) && !searchCat.includes(catLower)) return false;
-      }
+      if (searchCat && !matchesCategory(v.category, searchCat)) return false;
       return true;
     });
 
