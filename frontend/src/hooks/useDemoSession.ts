@@ -20,6 +20,22 @@ import {
 } from '../data/demoProfiles';
 import { getSavedCity, saveCity } from '../utils/locationHelpers';
 import { CalendarOverrides } from '../utils/vendorFilters';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { logoutUser, type AuthProfile } from '../lib/supabaseAuth';
+import {
+  fetchEventsFromSupabase,
+  saveEventToSupabase,
+  fetchTimelineTasksFromSupabase,
+  saveTimelineTaskToSupabase,
+  fetchCustomerProfilesFromSupabase,
+  saveCustomerProfileToSupabase,
+  deleteCustomerProfileFromSupabase,
+  fetchOrganizerClientsFromSupabase,
+  saveOrganizerClientToSupabase,
+  checkSlotAvailability,
+  createBookingWithConflictCheck,
+  subscribeToWedoraRealtime,
+} from '../lib/supabaseData';
 
 export type UserRole = 'VENDOR' | 'PLANNER' | 'CUSTOMER';
 
@@ -28,6 +44,8 @@ export interface UserSession {
   name: string;
   email: string;
   vendorId?: string;
+  id?: string;
+  isDemo?: boolean;
 }
 
 const STORAGE_KEYS = {
@@ -129,6 +147,145 @@ export function useDemoSession() {
     return () => {
       window.removeEventListener('wedora:session_sync', handleSync);
       window.removeEventListener('wedora:city_changed', handleCitySync);
+    };
+  }, []);
+
+  // Supabase Auth session listener & initial data sync
+  useEffect(() => {
+    let unsubscribeRealtime: (() => void) | undefined;
+
+    async function initSupabaseSession() {
+      if (!isSupabaseConfigured()) return;
+      try {
+        const { data } = await supabase.auth.getSession();
+        const authUser = data.session?.user;
+        if (authUser) {
+          const role: UserRole = (authUser.user_metadata?.role as UserRole) || 'CUSTOMER';
+          const name: string =
+            (authUser.user_metadata?.name as string) || authUser.email?.split('@')[0] || 'User';
+
+          const authSession: UserSession = {
+            id: authUser.id,
+            role,
+            name,
+            email: authUser.email || '',
+            isDemo: false,
+          };
+          setSessionState(authSession);
+          saveStored(STORAGE_KEYS.SESSION, authSession);
+
+          // Fetch authenticated events
+          const dbEvents = await fetchEventsFromSupabase(authUser.id, role);
+          if (dbEvents && dbEvents.length > 0) {
+            setEvents(dbEvents);
+          }
+
+          // Fetch authenticated timeline tasks
+          const dbTasks = await fetchTimelineTasksFromSupabase();
+          if (dbTasks && dbTasks.length > 0) {
+            setTimelineTasks(dbTasks);
+          }
+
+          // Fetch customer family profiles
+          if (role === 'CUSTOMER') {
+            const dbProfiles = await fetchCustomerProfilesFromSupabase(authUser.id);
+            if (dbProfiles && dbProfiles.length > 0) {
+              setCustomerProfiles(dbProfiles);
+            }
+          }
+
+          // Fetch organizer clients
+          if (role === 'PLANNER') {
+            const dbClients = await fetchOrganizerClientsFromSupabase(authUser.id);
+            if (dbClients && dbClients.length > 0) {
+              setOrganizerClients(dbClients);
+            }
+          }
+        }
+
+        // Setup Realtime Subscription for Cross-Device Synchronization
+        unsubscribeRealtime = subscribeToWedoraRealtime((table, eventType, newRecord, oldRecord) => {
+          if (table === 'events') {
+            if (eventType === 'INSERT' && newRecord) {
+              setEvents((prev) => {
+                if (prev.some((e) => e.id === newRecord.id)) return prev;
+                return [
+                  {
+                    id: newRecord.id,
+                    title: newRecord.event_name,
+                    eventType: newRecord.event_type || 'Wedding',
+                    targetDate: newRecord.event_date,
+                    city: newRecord.city,
+                    area: newRecord.area,
+                    guestCount: newRecord.guest_count,
+                    allocatedBudget: newRecord.estimated_budget,
+                    description: newRecord.description || '',
+                    ownerId: newRecord.owner_user_id,
+                    organizerClientId: newRecord.organizer_client_id,
+                    isDemo: newRecord.is_demo,
+                    services: ['Catering', 'Decoration', 'Lighting', 'Photography', 'Sound'],
+                  },
+                  ...prev,
+                ];
+              });
+            } else if (eventType === 'UPDATE' && newRecord) {
+              setEvents((prev) =>
+                prev.map((e) =>
+                  e.id === newRecord.id
+                    ? {
+                        ...e,
+                        title: newRecord.event_name,
+                        targetDate: newRecord.event_date,
+                        allocatedBudget: newRecord.estimated_budget,
+                        guestCount: newRecord.guest_count,
+                      }
+                    : e
+                )
+              );
+            } else if (eventType === 'DELETE' && oldRecord) {
+              setEvents((prev) => prev.filter((e) => e.id !== oldRecord.id));
+            }
+          } else if (table === 'timeline_tasks') {
+            if (eventType === 'INSERT' && newRecord) {
+              setTimelineTasks((prev) => {
+                if (prev.some((t) => t.id === newRecord.id)) return prev;
+                return [
+                  {
+                    id: newRecord.id,
+                    eventId: newRecord.event_id,
+                    title: newRecord.task_name,
+                    dueDate: newRecord.deadline || '',
+                    status: newRecord.status,
+                    category: 'General',
+                  },
+                  ...prev,
+                ];
+              });
+            } else if (eventType === 'UPDATE' && newRecord) {
+              setTimelineTasks((prev) =>
+                prev.map((t) =>
+                  t.id === newRecord.id
+                    ? {
+                        ...t,
+                        status: newRecord.status,
+                        title: newRecord.task_name,
+                        dueDate: newRecord.deadline || t.dueDate,
+                      }
+                    : t
+                )
+              );
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Supabase sync notice:', err);
+      }
+    }
+
+    initSupabaseSession();
+
+    return () => {
+      if (unsubscribeRealtime) unsubscribeRealtime();
     };
   }, []);
 
@@ -336,6 +493,12 @@ export function useDemoSession() {
         return next;
       });
 
+      if (isSupabaseConfigured() && session.id && !session.isDemo) {
+        saveCustomerProfileToSupabase(newProfile, session.id).catch((err) =>
+          console.warn('Supabase family profile save error:', err)
+        );
+      }
+
       return newProfile;
     },
     [session, activeCustomerProfile, customerProfiles, customerEvents]
@@ -371,6 +534,12 @@ export function useDemoSession() {
         saveStored(STORAGE_KEYS.CUSTOMER_PROFILES, next);
         return next;
       });
+
+      if (isSupabaseConfigured() && session.id && !session.isDemo) {
+        deleteCustomerProfileFromSupabase(id).catch((err) =>
+          console.warn('Supabase family profile delete error:', err)
+        );
+      }
 
       if (activeProfileId === id) {
         const primary = activeCustomerProfiles.find((p) => p.role === 'PRIMARY');
@@ -462,6 +631,12 @@ export function useDemoSession() {
         saveStored(STORAGE_KEYS.ORGANIZER_CLIENTS, next);
         return next;
       });
+
+      if (isSupabaseConfigured() && session.id && !session.isDemo) {
+        saveOrganizerClientToSupabase(newClient, session.id).catch((err) =>
+          console.warn('Supabase organizer client save error:', err)
+        );
+      }
 
       setActiveClientIdState(newClientId);
       saveStored(STORAGE_KEYS.ACTIVE_CLIENT_ID, newClientId);
@@ -555,6 +730,14 @@ export function useDemoSession() {
         return next;
       });
       setActiveEventId(newEvent.id);
+
+      // Async persist to Supabase if authenticated user
+      if (isSupabaseConfigured() && session.id && !session.isDemo) {
+        saveEventToSupabase(newEvent, session.id).catch((err) =>
+          console.warn('Supabase event save notice:', err)
+        );
+      }
+
       return newEvent;
     },
     [setActiveEventId, session, activeCustomerProfile]
@@ -702,6 +885,68 @@ export function useDemoSession() {
     []
   );
 
+  // Authenticated Supabase Login
+  const loginAsAuthenticated = useCallback(
+    async (profile: AuthProfile) => {
+      const authSession: UserSession = {
+        role: profile.role,
+        name: profile.name,
+        email: profile.email,
+        id: profile.id,
+        isDemo: false,
+      };
+      setSessionState(authSession);
+      saveStored(STORAGE_KEYS.SESSION, authSession);
+
+      if (profile.role === 'CUSTOMER') {
+        const primaryId = `prof-${profile.email.replace(/[^a-zA-Z0-9]/g, '-')}-primary`;
+        setActiveProfileIdState(primaryId);
+        saveStored(STORAGE_KEYS.ACTIVE_PROFILE_ID, primaryId);
+      }
+
+      if (isSupabaseConfigured() && profile.id) {
+        try {
+          const dbEvents = await fetchEventsFromSupabase(profile.id, profile.role);
+          if (dbEvents && dbEvents.length > 0) {
+            setEvents(dbEvents);
+            setActiveEventIdState(dbEvents[0].id);
+          }
+          if (profile.role === 'CUSTOMER') {
+            const dbProfiles = await fetchCustomerProfilesFromSupabase(profile.id);
+            if (dbProfiles && dbProfiles.length > 0) {
+              setCustomerProfiles(dbProfiles);
+              setActiveProfileIdState(dbProfiles[0].id);
+            }
+          } else if (profile.role === 'PLANNER') {
+            const dbClients = await fetchOrganizerClientsFromSupabase(profile.id);
+            if (dbClients && dbClients.length > 0) {
+              setOrganizerClients(dbClients);
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching authenticated data:', e);
+        }
+      }
+    },
+    []
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await logoutUser();
+    } catch {
+      // Ignored
+    }
+    const guestSession: UserSession = {
+      role: 'CUSTOMER',
+      name: 'Guest User',
+      email: '',
+      isDemo: true,
+    };
+    setSessionState(guestSession);
+    saveStored(STORAGE_KEYS.SESSION, guestSession);
+  }, []);
+
   // Update vendor calendar availability
   const updateVendorAvailability = useCallback(
     (vendorId: string, date: string, status: AvailabilityStatus) => {
@@ -848,6 +1093,24 @@ export function useDemoSession() {
       });
 
       updateVendorAvailability(quote.vendorId, newBooking.eventDate, 'Fully Booked');
+
+      // Slot booking & conflict prevention at database level for authenticated users
+      if (isSupabaseConfigured() && session.id && !session.isDemo) {
+        checkSlotAvailability(quote.vendorId, newBooking.eventDate, 'FULL_DAY').then((avail) => {
+          if (!avail.isAvailable) {
+            console.warn('Slot conflict detected in Supabase:', avail.reason);
+          } else {
+            createBookingWithConflictCheck({
+              eventId: newBooking.eventId,
+              quotationId,
+              vendorId: quote.vendorId,
+              customerId: session.id!,
+              agreedAmount: newBooking.agreedAmount,
+              eventDate: newBooking.eventDate,
+            }).catch((err) => console.warn('Supabase booking sync notice:', err));
+          }
+        });
+      }
 
       const newTask: TimelineTask = {
         id: `task-${Date.now()}`,
@@ -1053,6 +1316,9 @@ export function useDemoSession() {
     isShortlisted,
     toggleShortlist,
     loginAsRole,
+    loginAsAuthenticated,
+    logout,
+    isSupabaseUser: Boolean(session.id && !session.isDemo),
     updateVendorAvailability,
     createInquiry,
     createQuotation,

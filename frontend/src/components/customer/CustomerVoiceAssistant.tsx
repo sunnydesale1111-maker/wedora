@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VoiceLanguage } from '@/utils/vendorVoiceNlu';
+import { speakStandardText, stopStandardSpeaking, WEDORA_VOICE_CONFIG } from '@/utils/sharedVoiceConfig';
 import {
   parsePlannerVoiceCommand,
   ParsedPlannerCommand,
@@ -54,7 +55,7 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
-        recognition.interimResults = false;
+        recognition.interimResults = true;
         recognition.lang =
           detectedLang === 'mr' ? 'mr-IN' : detectedLang === 'hi' ? 'hi-IN' : 'en-IN';
 
@@ -66,9 +67,21 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
         recognition.onerror = () => setIsListening(false);
 
         recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setInputText(transcript);
-          handleExecute(transcript);
+          let currentInterim = '';
+          let finalTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              currentInterim += event.results[i][0].transcript;
+            }
+          }
+          if (finalTranscript) {
+            setInputText(finalTranscript);
+            handleExecute(finalTranscript);
+          } else if (currentInterim) {
+            setInputText(currentInterim);
+          }
         };
 
         recognitionRef.current = recognition;
@@ -85,49 +98,21 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
   }, [detectedLang]);
 
   const stopSpeaking = () => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    stopStandardSpeaking();
     setIsSpeaking(false);
   };
 
-  // Text-to-speech with natural pacing and prompt playback
+  // Standardized Text-to-speech with calm 0.85x speed and Indian voice prioritization
   const speakText = (text: string, lang: VoiceLanguage) => {
-    if (!speechEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (!speechEnabled || typeof window === 'undefined') return;
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang === 'mr' ? 'mr-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN';
-    // Conversational pacing: 1.08 provides crisp, natural delivery without sluggish stretched words
-    utterance.rate = 1.08;
-    utterance.pitch = 1.0;
-
-    // Prefer natural/neural voice if available on system
-    try {
-      const voices = window.speechSynthesis.getVoices();
-      if (voices && voices.length > 0) {
-        const langPrefix = lang === 'mr' ? 'mr' : lang === 'hi' ? 'hi' : 'en';
-        const bestVoice =
-          voices.find(
-            (v) =>
-              v.lang.toLowerCase().startsWith(langPrefix) &&
-              (v.name.includes('Natural') ||
-                v.name.includes('Neural') ||
-                v.name.includes('Google') ||
-                v.name.includes('Online'))
-          ) || voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
-
-        if (bestVoice) {
-          utterance.voice = bestVoice;
-        }
-      }
-    } catch {}
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
+    speakStandardText(text, lang, {
+      rate: WEDORA_VOICE_CONFIG.speakingRate, // 0.85x speed
+      pitch: WEDORA_VOICE_CONFIG.pitch,
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false),
+    });
   };
 
   const toggleListening = () => {

@@ -29,12 +29,16 @@ import {
   recordSlotBooking,
   loadVendorSlotBookings,
 } from '@/types/vendorSlot';
+import { checkSlotAvailability } from '@/lib/supabaseData';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import {
   VoiceLanguage,
   parseVendorVoiceCommand,
   generateVoiceResponse,
   ParsedVoiceCommand,
+  VendorConversationContext,
 } from '@/utils/vendorVoiceNlu';
+import { speakStandardText, stopStandardSpeaking, WEDORA_VOICE_CONFIG } from '@/utils/sharedVoiceConfig';
 import {
   QuotationReviewModal,
   ProvisionalQuotationData,
@@ -75,8 +79,9 @@ export function VendorVoiceAssistant({
   const [interimTranscript, setInterimTranscript] = useState<string>('');
   const [textInput, setTextInput] = useState<string>('');
 
-  // Conversation history
+  // Conversation history & stateful context
   const [lastUserSpeech, setLastUserSpeech] = useState<string>('');
+  const [conversationContext, setConversationContext] = useState<VendorConversationContext>({ role: 'VENDOR' });
   const [aiMessage, setAiMessage] = useState<string>(
     'Hello! I am your live AI Voice Assistant. Speak in English, हिन्दी, or मराठी to check availability, book slots, or draft quotations.'
   );
@@ -164,45 +169,17 @@ export function VendorVoiceAssistant({
     };
   }, []);
 
-  // Text-to-Speech function
+  // Standardized Text-to-Speech function (0.85x speed across all dashboards)
   const speakText = (text: string, language: VoiceLanguage) => {
-    if (isAudioMuted || typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (isAudioMuted || typeof window === 'undefined') return;
 
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-
-      // Select suitable Indian voices if available
-      const voices = window.speechSynthesis.getVoices();
-      if (language === 'mr') {
-        utterance.lang = 'mr-IN';
-        const mrVoice = voices.find((v) => v.lang.startsWith('mr') || v.lang.includes('Marathi'));
-        if (mrVoice) utterance.voice = mrVoice;
-        else {
-          // Fallback to Hindi voice if Marathi voice is not installed
-          const hiVoice = voices.find((v) => v.lang.startsWith('hi'));
-          if (hiVoice) utterance.voice = hiVoice;
-        }
-      } else if (language === 'hi') {
-        utterance.lang = 'hi-IN';
-        const hiVoice = voices.find((v) => v.lang.startsWith('hi'));
-        if (hiVoice) utterance.voice = hiVoice;
-      } else {
-        utterance.lang = 'en-IN';
-        const inVoice = voices.find((v) => v.lang === 'en-IN' || v.name.includes('India'));
-        if (inVoice) utterance.voice = inVoice;
-      }
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-
-      window.speechSynthesis.speak(utterance);
-    } catch (err) {
-      console.warn('TTS error:', err);
-    }
+    speakStandardText(text, language, {
+      rate: WEDORA_VOICE_CONFIG.speakingRate,
+      pitch: WEDORA_VOICE_CONFIG.pitch,
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false),
+    });
   };
 
   // Toggle Microphone
@@ -218,10 +195,8 @@ export function VendorVoiceAssistant({
       recognitionRef.current.stop();
       setIsListening(false);
     } else {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(false);
-      }
+      stopStandardSpeaking();
+      setIsSpeaking(false);
       try {
         recognitionRef.current.lang = lang === 'mr' ? 'mr-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN';
         recognitionRef.current.start();
@@ -233,19 +208,33 @@ export function VendorVoiceAssistant({
   };
 
   // Main input processor
-  const handleProcessVoiceInput = (rawInput: string) => {
+  const handleProcessVoiceInput = async (rawInput: string) => {
     if (!rawInput.trim()) return;
 
     setLastUserSpeech(rawInput);
     setTextInput('');
 
-    // Parse command with Multilingual NLU
-    const parsed: ParsedVoiceCommand = parseVendorVoiceCommand(rawInput, lang);
+    // Parse command with Multilingual NLU & Conversation Context
+    const parsed: ParsedVoiceCommand = parseVendorVoiceCommand(rawInput, lang, undefined, conversationContext);
 
-    // If a different language was detected, sync language state
+    // If a different language was detected, sync language state without dropping context
     if (parsed.detectedLang !== lang) {
       setLang(parsed.detectedLang);
     }
+
+    // Retain context memory across turns and language switches
+    setConversationContext((prev) => ({
+      ...prev,
+      detectedLang: parsed.detectedLang,
+      intent: parsed.intent !== 'UNKNOWN' && parsed.intent !== 'NEED_CLARIFICATION' ? parsed.intent : prev.intent,
+      date: parsed.date || prev.date,
+      slot: parsed.slot || prev.slot,
+      guestCount: parsed.guestCount ?? prev.guestCount,
+      pricePerPlate: parsed.pricePerPlate ?? prev.pricePerPlate,
+      quotedAmount: parsed.quotedAmount ?? prev.quotedAmount,
+      additionalCharges: parsed.additionalCharges ?? prev.additionalCharges,
+      missingField: parsed.missingField,
+    }));
 
     // Workflow 0: Need Clarification (Missing critical date, guest count, or rate)
     if (parsed.intent === 'NEED_CLARIFICATION' && parsed.clarificationPrompt) {
@@ -254,7 +243,7 @@ export function VendorVoiceAssistant({
       return;
     }
 
-    // Workflow 1: Check Availability (Exact requested date only)
+    // Workflow 1: Check Availability (Exact requested date and slot)
     if (parsed.intent === 'CHECK_AVAILABILITY') {
       if (!parsed.date) {
         const prompt =
@@ -275,11 +264,57 @@ export function VendorVoiceAssistant({
         calendarOverrides[targetDate]
       );
 
+      let firstHalfBooked = slotStatus.firstHalfBooked;
+      let secondHalfBooked = slotStatus.secondHalfBooked;
+      let isVerifyError = false;
+
+      // Query actual vendor availability data from Supabase if configured
+      if (isSupabaseConfigured()) {
+        try {
+          const [fRes, sRes] = await Promise.all([
+            checkSlotAvailability(vendor.id, targetDate, 'FIRST_HALF'),
+            checkSlotAvailability(vendor.id, targetDate, 'SECOND_HALF'),
+          ]);
+
+          if (fRes.error || sRes.error) {
+            isVerifyError = true;
+          } else {
+            if (!fRes.isAvailable) firstHalfBooked = true;
+            if (!sRes.isAvailable) secondHalfBooked = true;
+          }
+        } catch {
+          isVerifyError = true;
+        }
+      }
+
+      if (isVerifyError) {
+        const errorMsg =
+          parsed.detectedLang === 'mr'
+            ? 'मी आत्ता त्या स्लॉटची पडताळणी करू शकलो नाही. कृपया पुन्हा प्रयत्न करा.'
+            : parsed.detectedLang === 'hi'
+            ? 'मैं अभी इस स्लॉट की जांच नहीं कर सका। कृपया पुनः प्रयास करें।'
+            : "I couldn't verify that slot right now. Please try again.";
+        setAiMessage(errorMsg);
+        speakText(errorMsg, parsed.detectedLang);
+        return;
+      }
+
+      // Preserve confirmed date and queried status in context
+      setConversationContext((prev) => ({
+        ...prev,
+        date: targetDate,
+        lastCheckedAvailability: {
+          date: targetDate,
+          firstHalfBooked,
+          secondHalfBooked,
+        },
+      }));
+
       const resp = generateVoiceResponse(parsed, {
         vendorBusinessName: vendor.businessName,
         vendorCategory: vendor.category,
-        firstHalfBooked: slotStatus.firstHalfBooked,
-        secondHalfBooked: slotStatus.secondHalfBooked,
+        firstHalfBooked,
+        secondHalfBooked,
       });
 
       setAiMessage(resp.message);
@@ -287,8 +322,8 @@ export function VendorVoiceAssistant({
 
       setActiveAvailabilityCard({
         date: targetDate,
-        firstHalfBooked: slotStatus.firstHalfBooked,
-        secondHalfBooked: slotStatus.secondHalfBooked,
+        firstHalfBooked,
+        secondHalfBooked,
         firstHalfName: slotStatus.firstHalfDetails?.eventName,
         secondHalfName: slotStatus.secondHalfDetails?.eventName,
       });
@@ -373,12 +408,16 @@ export function VendorVoiceAssistant({
         clientName: targetClient,
         eventName: `${targetClient} ${vendor.category}`,
         date: targetDate,
-        guestCount: targetGuests,
+        location: 'Baner, Pune',
+        guestCount: targetGuests || 1,
         pricePerPlate: targetPricePerPlate,
         serviceCategory: vendor.category,
         quotedAmount: targetAmount,
         additionalCharges: targetAdditionalCharges,
-        serviceScope: `Comprehensive ${vendor.category} package for ${targetGuests} guests at ₹${targetPricePerPlate?.toLocaleString('en-IN') || 0}/plate.`,
+        taxAmount: 0,
+        serviceScope: targetPricePerPlate
+          ? `Comprehensive ${vendor.category} package for ${targetGuests} guests at ₹${targetPricePerPlate?.toLocaleString('en-IN') || 0}/plate.`
+          : `Customized turnkey ${vendor.category} package for ${targetClient}.`,
         includedServices: [
           'Professional Service Crew',
           'Delivery & Setup Logistics',
@@ -836,6 +875,9 @@ export function VendorVoiceAssistant({
             <div className="flex items-center gap-2 font-bold text-plum">
               <FileText className="size-4 text-gold" />
               <span>Provisional Quotation Draft Generated</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                Status: Draft / Provisional
+              </span>
             </div>
             <button
               onClick={() => setProvisionalQuote(null)}
@@ -845,8 +887,18 @@ export function VendorVoiceAssistant({
             </button>
           </div>
 
-          <div className="text-[11px] text-muted-foreground">
-            Client: <strong className="text-navy">{provisionalQuote.clientName}</strong> · Event: <strong className="text-navy">{provisionalQuote.eventName}</strong> · Date: <strong className="text-navy">{provisionalQuote.date}</strong> · Category: <strong className="text-navy">{provisionalQuote.serviceCategory}</strong>
+          <div className="text-[11px] text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
+            <span>Vendor: <strong className="text-navy">{provisionalQuote.vendorBusinessName}</strong></span>
+            <span>·</span>
+            <span>Client: <strong className="text-navy">{provisionalQuote.clientName}</strong></span>
+            <span>·</span>
+            <span>Event: <strong className="text-navy">{provisionalQuote.eventName}</strong></span>
+            <span>·</span>
+            <span>Date: <strong className="text-navy">{provisionalQuote.date}</strong></span>
+            <span>·</span>
+            <span>Location: <strong className="text-navy">{provisionalQuote.location || 'Baner, Pune'}</strong></span>
+            <span>·</span>
+            <span>Category: <strong className="text-navy">{provisionalQuote.serviceCategory}</strong></span>
           </div>
 
           {/* Structured Automatic Quotation Calculation Table */}
@@ -859,23 +911,46 @@ export function VendorVoiceAssistant({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                <tr>
-                  <td className="py-2 px-3 sm:px-4 text-muted-foreground">Number of guests</td>
-                  <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
-                    {provisionalQuote.guestCount}
-                  </td>
-                </tr>
                 {provisionalQuote.pricePerPlate ? (
-                  <tr>
-                    <td className="py-2 px-3 sm:px-4 text-muted-foreground">Price per plate</td>
-                    <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
-                      ₹{provisionalQuote.pricePerPlate.toLocaleString('en-IN')}
-                    </td>
-                  </tr>
-                ) : null}
+                  <>
+                    <tr>
+                      <td className="py-2 px-3 sm:px-4 text-muted-foreground">Number of guests</td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
+                        {provisionalQuote.guestCount}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-3 sm:px-4 text-muted-foreground">Price per plate</td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
+                        ₹{provisionalQuote.pricePerPlate.toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-3 sm:px-4 text-muted-foreground">Itemized subtotal (Guests × Rate)</td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
+                        ₹{(provisionalQuote.guestCount * provisionalQuote.pricePerPlate).toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  </>
+                ) : (
+                  <>
+                    <tr>
+                      <td className="py-2 px-3 sm:px-4 text-muted-foreground">Service package</td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
+                        {provisionalQuote.serviceCategory} Execution
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-3 sm:px-4 text-muted-foreground">Package subtotal</td>
+                      <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
+                        ₹{provisionalQuote.quotedAmount.toLocaleString('en-IN')}
+                      </td>
+                    </tr>
+                  </>
+                )}
                 {provisionalQuote.additionalCharges > 0 ? (
                   <tr>
-                    <td className="py-2 px-3 sm:px-4 text-muted-foreground">Additional charges / taxes</td>
+                    <td className="py-2 px-3 sm:px-4 text-muted-foreground">Additional charges / logistics</td>
                     <td className="py-2 px-3 sm:px-4 text-right font-semibold text-navy">
                       +₹{provisionalQuote.additionalCharges.toLocaleString('en-IN')}
                     </td>
@@ -931,7 +1006,7 @@ export function VendorVoiceAssistant({
         ))}
       </div>
 
-      {/* 6. WhatsApp-Style Voice & Message Input Bar */}
+      {/* 6. WhatsApp-Style Voice & Message Input Bar: Type Message Box -> Microphone -> Send Button */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -941,29 +1016,7 @@ export function VendorVoiceAssistant({
         }}
         className="mt-2.5 flex items-center gap-2 bg-secondary/80 p-1.5 sm:p-2 rounded-full border border-border/80 shadow-xs relative z-10"
       >
-        {/* Compact Integrated Microphone Icon (Tap to speak / Tap to stop) */}
-        <button
-          type="button"
-          onClick={toggleListening}
-          title={
-            isListening
-              ? 'Tap to stop recording'
-              : 'Tap microphone to speak (English, हिन्दी, मराठी)'
-          }
-          className={`size-10 sm:size-10.5 shrink-0 rounded-full flex items-center justify-center transition-all ${
-            isListening
-              ? 'bg-red-500 text-white shadow-md animate-pulse scale-105'
-              : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs hover:scale-105'
-          }`}
-        >
-          {isListening ? (
-            <MicOff className="size-5 animate-pulse" />
-          ) : (
-            <Mic className="size-5" />
-          )}
-        </button>
-
-        {/* Text Input (Supports typing or reviewing speech transcription) */}
+        {/* 1. Text Input Message Box (Occupies available width) */}
         <div className="relative flex-1">
           <input
             type="text"
@@ -996,7 +1049,29 @@ export function VendorVoiceAssistant({
           )}
         </div>
 
-        {/* Compact Integrated Send Icon Button */}
+        {/* 2. Microphone Button (Immediately after message box) */}
+        <button
+          type="button"
+          onClick={toggleListening}
+          title={
+            isListening
+              ? 'Tap to stop recording'
+              : 'Tap microphone to speak (English, हिन्दी, मराठी)'
+          }
+          className={`size-10 sm:size-10.5 shrink-0 rounded-full flex items-center justify-center transition-all ${
+            isListening
+              ? 'bg-red-500 text-white shadow-md animate-pulse scale-105'
+              : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs hover:scale-105'
+          }`}
+        >
+          {isListening ? (
+            <MicOff className="size-5 animate-pulse" />
+          ) : (
+            <Mic className="size-5" />
+          )}
+        </button>
+
+        {/* 3. Send Button (Immediately after microphone) */}
         <button
           type="submit"
           disabled={!textInput.trim()}

@@ -27,7 +27,7 @@ export function DashboardShell({
 }) {
   const [open, setOpen] = useState(false);
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
-  const { city, changeCity } = useDemoSession();
+  const { city, changeCity, logout, session } = useDemoSession();
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -65,12 +65,27 @@ export function DashboardShell({
             </button>
           ))}
         </nav>
-        <Link
-          to="/get-started"
-          className="relative m-3 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm hover:bg-sidebar-accent transition"
-        >
-          <LogOut className="size-4" /> Switch role / Demo login
-        </Link>
+        <div className="relative m-3 space-y-1">
+          {session.id && !session.isDemo ? (
+            <button
+              type="button"
+              onClick={async () => {
+                await logout();
+                window.location.href = "/get-started";
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-xs text-rose-200 hover:bg-rose-950/40 hover:text-rose-100 transition cursor-pointer"
+            >
+              <LogOut className="size-4 text-rose-400" /> Sign Out
+            </button>
+          ) : (
+            <Link
+              to="/get-started"
+              className="flex items-center gap-3 rounded-xl px-3 py-2 text-xs text-sidebar-foreground/80 hover:bg-sidebar-accent transition"
+            >
+              <LogOut className="size-4 text-gold" /> Switch role / Demo login
+            </Link>
+          )}
+        </div>
       </aside>
 
       {open && (

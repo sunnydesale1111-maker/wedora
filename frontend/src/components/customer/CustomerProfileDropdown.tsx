@@ -9,6 +9,7 @@ import {
   Shield,
   Eye,
   Lock,
+  LogOut,
 } from 'lucide-react';
 import { CustomerProfile, MAX_ADDITIONAL_FAMILY_PROFILES } from '@/types/profile';
 
@@ -19,6 +20,7 @@ interface CustomerProfileDropdownProps {
   onAddFamilyMember: () => void;
   onManageProfiles: () => void;
   canManageProfiles: boolean;
+  onSignOut?: () => void;
 }
 
 export function CustomerProfileDropdown({
@@ -28,6 +30,7 @@ export function CustomerProfileDropdown({
   onAddFamilyMember,
   onManageProfiles,
   canManageProfiles,
+  onSignOut,
 }: CustomerProfileDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -246,6 +249,19 @@ export function CustomerProfileDropdown({
                 <Lock className="size-3 text-muted-foreground" />
                 <span>Family profile settings managed by Primary Account</span>
               </div>
+            )}
+            {onSignOut && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onSignOut();
+                }}
+                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition cursor-pointer mt-1 pt-1.5 border-t border-border/40"
+              >
+                <LogOut className="size-3.5 text-rose-600 shrink-0" />
+                <span>Sign Out</span>
+              </button>
             )}
           </div>
         </div>

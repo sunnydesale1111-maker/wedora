@@ -134,15 +134,9 @@ export const PlannerVendorDirectory: React.FC = () => {
   };
 
   // Initiate Swap Workflow
-  const handleInitiateSwap = (candidateReplacement: Vendor) => {
-    // Find an existing shortlisted vendor in the same category to replace
-    const sameCategory = eventSelectedVendors.find(
-      (v) => v.category === candidateReplacement.category
-    );
-
-    // If no same category vendor found, use the first selected vendor or null
-    setVendorToReplace(sameCategory || eventSelectedVendors[0] || null);
-    setReplacementVendor(candidateReplacement);
+  const handleInitiateSwap = (vendor: Vendor) => {
+    setVendorToReplace(vendor);
+    setReplacementVendor(null);
     setSwapModalOpen(true);
   };
 
@@ -152,8 +146,6 @@ export const PlannerVendorDirectory: React.FC = () => {
     removeFromShortlist(original.id, activeEventId);
     // Add replacement to shortlist
     addToShortlist(replacement, activeEventId);
-
-    alert(`Successfully swapped ${original.businessName} with ${replacement.businessName} for ${activeEvent.eventName}!`);
   };
 
   return (
@@ -362,6 +354,7 @@ export const PlannerVendorDirectory: React.FC = () => {
                           </button>
 
                           <Button
+                            type="button"
                             size="sm"
                             variant="outline"
                             onClick={() => handleInitiateSwap(vendor)}
@@ -489,6 +482,7 @@ export const PlannerVendorDirectory: React.FC = () => {
                         </button>
 
                         <Button
+                          type="button"
                           size="sm"
                           variant="hero"
                           onClick={() => handleInitiateSwap(vendor)}
@@ -537,6 +531,11 @@ export const PlannerVendorDirectory: React.FC = () => {
         replacementVendor={replacementVendor}
         eventName={activeEvent.eventName}
         eventDate={calendarDate}
+        eventCity={activeEvent.city}
+        eventArea={activeEvent.area}
+        eventSlot="FULL_DAY"
+        eventId={activeEvent.id}
+        selectedVendors={eventSelectedVendors}
         onConfirmSwap={handleConfirmSwap}
       />
     </div>

@@ -35,6 +35,36 @@ export interface ParsedVoiceCommand {
 }
 
 /**
+ * Structured Conversation Context State
+ * Retains supplied dates, slots, parameters, and intent across conversation turns and language switches.
+ */
+export interface VendorConversationContext {
+  role?: 'VENDOR';
+  detectedLang?: VoiceLanguage;
+  intent?: VoiceIntentType;
+  date?: string; // YYYY-MM-DD
+  time?: string;
+  slot?: VendorSlotType;
+  clientName?: string;
+  guestCount?: number;
+  pricePerPlate?: number;
+  quotedAmount?: number;
+  additionalCharges?: number;
+  lastCheckedAvailability?: {
+    date: string;
+    firstHalfBooked: boolean;
+    secondHalfBooked: boolean;
+  };
+  missingField?: 'date' | 'guestCount' | 'pricePerPlate' | 'slot' | 'quoteReference';
+  history?: Array<{
+    sender: 'user' | 'assistant';
+    text: string;
+    lang: VoiceLanguage;
+    timestamp: string;
+  }>;
+}
+
+/**
  * Deterministic Quotation Calculation
  * Formula: Subtotal = Guest Count × Price Per Plate
  * Total Amount = Subtotal + Additional Charges + Taxes - Discounts
@@ -127,6 +157,39 @@ export function convertSpokenNumberWords(text: string): string {
     ['सातशे', '700'],
     ['आठशे', '800'],
     ['नऊशे', '900'],
+    // Transliterated Marathi & Hindi spoken numbers
+    ['pandrah sau', '1500'],
+    ['barah sau', '1200'],
+    ['barashe', '1200'],
+    ['nau sau', '900'],
+    ['naushe', '900'],
+    ['aath sau', '800'],
+    ['aathshe', '800'],
+    ['saat sau', '700'],
+    ['saatshe', '700'],
+    ['sat sau', '700'],
+    ['satshe', '700'],
+    ['chhah sau', '600'],
+    ['chhe sau', '600'],
+    ['sahashe', '600'],
+    ['paanch sau', '500'],
+    ['panch sau', '500'],
+    ['pachshe', '500'],
+    ['chaar sau', '400'],
+    ['charshe', '400'],
+    ['teen sau', '300'],
+    ['teenshe', '300'],
+    ['tin sau', '300'],
+    ['tinshe', '300'],
+    ['do sau', '200'],
+    ['donshe', '200'],
+    ['ek sau', '100'],
+    ['shambhar', '100'],
+    ['ek hazar', '1000'],
+    ['do hazar', '2000'],
+    ['dedh hazar', '1500'],
+    ['don hazar', '2000'],
+    ['dono hazar', '2000'],
     // Hindi
     ['दो हज़ार', '2000'],
     ['दो हजार', '2000'],
@@ -185,36 +248,50 @@ export function detectLanguage(text: string, currentLang: VoiceLanguage = 'en'):
   if (/[\u0900-\u097F]/.test(text)) {
     // Distinct Marathi keywords, affixes, and verbal forms
     const marathiKeywords = [
-      'करा', 'तपासा', 'डिसेंबर', 'पाहुणे', 'पाहुण्यांसाठी', 'पाहुण्यांचे', 'पाहुण्यांना',
-      'चौकशा', 'कॅलेंडर', 'आहे', 'नाही', 'सांगा', 'साठी', 'बनवा', 'दाखवा', 'पहा',
-      'पुनरावलोकन', 'दिवस', 'सकाळ', 'दुपार', 'संध्याकाळ', 'पहिला', 'दुसरा', 'दोन्ही',
-      'प्रमाणे', 'दर थाळी', 'थाळी', 'दर प्लेट', 'लाख'
+      'करा', 'करावे', 'तपासा', 'तपास', 'डिसेंबर', 'माझी', 'माझे', 'माझ्या', 'पाहुणे', 'पाहुण्यांसाठी', 'पाहुण्यांचे', 'पाहुण्यांना',
+      'चौकशा', 'कॅलेंडर', 'आहे', 'नाही', 'सांगा', 'सांग', 'साठी', 'बनवा', 'दाखवा', 'पहा', 'बघा',
+      'पुनरावलोकन', 'दिवस', 'सकाळ', 'दुपार', 'संध्याकाळ', 'दोन्ही',
+      'प्रमाणे', 'दर थाळी', 'थाळी', 'नक्की', 'रोजी'
     ];
-    for (const kw of marathiKeywords) {
-      if (normalized.includes(kw)) return 'mr';
-    }
 
-    // Distinct Hindi keywords
+    // Distinct Hindi keywords and verbal forms
     const hindiKeywords = [
-      'करो', 'बताओ', 'बताइए', 'दिसंबर', 'मेहमान', 'मेहमानों', 'पूछताछ', 'कैलेंडर',
-      'है', 'नहीं', 'दिखाओ', 'बनाओ', 'जांच', 'दिन', 'सुबह', 'शाम', 'पहला', 'दूसरा',
-      'दोनों', 'के लिए', 'प्रति प्लेट', 'पर प्लेट'
+      'करो', 'कीजिए', 'कीजिये', 'बताओ', 'बताइए', 'बताइये', 'दिसंबर', 'दिसम्बर', 'मेरी', 'मेरा', 'मेरे', 'मेहमान', 'मेहमानों',
+      'पूछताछ', 'है', 'नहीं', 'दिखाओ', 'दिखाइए', 'बनाओ', 'बनाइए', 'जांच', 'ज़रूर', 'जरूर',
+      'के लिए'
     ];
-    for (const kw of hindiKeywords) {
-      if (normalized.includes(kw)) return 'hi';
+
+    let mrScore = 0;
+    for (const kw of marathiKeywords) {
+      if (normalized.includes(kw)) mrScore++;
     }
 
-    // Default Devanagari
+    let hiScore = 0;
+    for (const kw of hindiKeywords) {
+      if (normalized.includes(kw)) hiScore++;
+    }
+
+    // Standalone postpositions (strictly bounded to avoid matching substrings like "कोटेशन" for "को")
+    if (/(?:^|[^\u0900-\u097F])(को|का|की|के|में)(?:[^\u0900-\u097F]|$)/.test(normalized)) {
+      hiScore++;
+    }
+    if (/(?:^|[^\u0900-\u097F])(ला|च्या|च्यासाठी)(?:[^\u0900-\u097F]|$)/.test(normalized)) {
+      mrScore++;
+    }
+
+    if (mrScore > hiScore) return 'mr';
+    if (hiScore > mrScore) return 'hi';
+    if (currentLang === 'mr' || currentLang === 'hi') return currentLang;
     return 'hi';
   }
 
   // 2. Transliterated Latin script (Code-switching / Hinglish / Marathiglish)
-  const marathiTranslit = /\b(sathi|tapaasa|tapas|ahe|kara|banva|dakhva|pahune|divas|madat|dusra|pahila|donhi|pramane)\b/i;
+  const marathiTranslit = /\b(sathi|tapaasa|tapas|ahe|kara|banva|dakhva|pahune|divas|madat|dusra|pahila|donhi|pramane|mazhi|majhi|mazhya|krupaya|shakyata)\b/i;
   if (marathiTranslit.test(normalized)) {
     return 'mr';
   }
 
-  const hindiTranslit = /\b(karo|batao|bataiye|ke\s*liye|mehmaan|hai|kya|banao|dikhaye|dekho|chahiye|pehle|dusre|dono|madad)\b/i;
+  const hindiTranslit = /\b(karo|batao|bataiye|ke\s*liye|mehmaan|hai|kya|banao|dikhaye|dekho|chahiye|pehle|dusre|dono|madad|meri|mera|mere)\b/i;
   if (hindiTranslit.test(normalized)) {
     return 'hi';
   }
@@ -260,10 +337,11 @@ export function formatDateHuman(isoDate: string, lang: VoiceLanguage = 'en'): st
 }
 
 /**
- * Parses dates in English, Hindi, and Marathi with relative date support
- * Resolves relative dates against the current Asia/Kolkata date
+ * Parses dates in English, Hindi, and Marathi with relative date and inflection support.
+ * Resolves relative dates against the current Asia/Kolkata date.
  */
 export function extractDateFromText(text: string, referenceDate?: Date): string | undefined {
+  if (!text) return undefined;
   const normalized = normalizeDevanagariNumerals(text.toLowerCase());
   const ref = referenceDate || new Date('2026-11-01T21:48:55+05:30'); // Configured vendor Asia/Kolkata timezone
 
@@ -287,17 +365,35 @@ export function extractDateFromText(text: string, referenceDate?: Date): string 
     return formatDateISO(d);
   }
 
-  // "next Friday", "next Saturday", etc.
-  const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const nextDayMatch = normalized.match(
-    /\bnext\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/i
-  );
-  if (nextDayMatch) {
-    const targetDay = daysOfWeek.indexOf(nextDayMatch[1].toLowerCase());
-    if (targetDay !== -1) {
+  // "this weekend" / "weekend" / "या वीकेंडला" / "इस वीकेंड"
+  if (/\b(this\s+weekend|weekend|या\s*वीकेंड(?:ला)?|इस\s*वीकेंड)\b/i.test(normalized)) {
+    const d = new Date(ref);
+    const day = d.getDay(); // 0 is Sun, 6 is Sat
+    const diff = day === 6 ? 0 : day === 0 ? 0 : (6 - day);
+    d.setDate(d.getDate() + diff);
+    return formatDateISO(d);
+  }
+
+  // Days of the week in English, Hindi, and Marathi
+  const dayNameMapping: Record<string, number> = {
+    sunday: 0, रविवार: 0, रविवारी: 0, इतवार: 0,
+    monday: 1, सोमवार: 1, सोमवारी: 1,
+    tuesday: 2, मंगळवार: 2, मंगळवारी: 2, मंगलवार: 2,
+    wednesday: 3, बुधवार: 3, बुधवारी: 3,
+    thursday: 4, गुरुवार: 4, गुरुवारी: 4, गुरूवार: 4,
+    friday: 5, शुक्रवार: 5, शुक्रवारी: 5,
+    saturday: 6, शनिवार: 6, शनिवारी: 6,
+  };
+
+  const nextDayRegex = /\b(?:next|पुढील|पुढच्या|अगले)\s+(sunday|monday|tuesday|wednesday|thursday|friday|saturday|रविवार|रविवारी|इतवार|सोमवार|सोमवारी|मंगळवार|मंगळवारी|मंगलवार|बुधवार|बुधवारी|गुरूवार|गुरुवार|गुरुवारी|शुक्रवार|शुक्रवारी|शनिवार|शनिवारी)\b/i;
+  const nextMatch = normalized.match(nextDayRegex);
+  if (nextMatch) {
+    const dayKey = nextMatch[1].toLowerCase();
+    const targetDay = dayNameMapping[dayKey];
+    if (targetDay !== undefined) {
       const d = new Date(ref);
       const currentDay = d.getDay();
-      let diff = targetDay - currentDay;
+      let diff = (targetDay - currentDay + 7) % 7;
       if (diff <= 0) diff += 7;
       d.setDate(d.getDate() + diff);
       return formatDateISO(d);
@@ -322,7 +418,7 @@ export function extractDateFromText(text: string, referenceDate?: Date): string 
     return `${y}-${m}-${d}`;
   }
 
-  // Month dictionary across 3 languages
+  // Month dictionary across 3 languages including inflections
   const MONTH_MAP: Record<string, string> = {
     // English
     january: '01', jan: '01',
@@ -337,19 +433,24 @@ export function extractDateFromText(text: string, referenceDate?: Date): string 
     october: '10', oct: '10',
     november: '11', nov: '11',
     december: '12', dec: '12',
-    // Hindi
+    // Hindi (with optional suffixes handled)
     जनवरी: '01', फरवरी: '02', मार्च: '03', अप्रैल: '04', मई: '05', जून: '06',
     जुलाई: '07', अगस्त: '08', सितंबर: '09', सितम्बर: '09', अक्टूबर: '10', नवंबर: '11', नवम्बर: '11', दिसंबर: '12', दिसम्बर: '12',
-    // Marathi
-    जानेवारी: '01', फेब्रुवारी: '02', एप्रिल: '04', मे: '05', जुलै: '07',
-    ऑगस्ट: '08', सप्टेंबर: '09', ऑक्टोबर: '10', नोव्हेंबर: '11', डिसेंबर: '12',
+    दिसंबरको: '12', दिसंबरकी: '12', दिसंबरमें: '12',
+    // Marathi (with inflected forms directly mapped)
+    जानेवारी: '01', फेब्रुवारी: '02', चैत्र: '03', वैशाख: '04', ज्येष्ठ: '05', आषाढ: '06',
+    श्रावण: '07', भाद्रपद: '08', अश्विन: '09', कार्तिक: '10', मार्गशीर्ष: '11', पौष: '12',
+    एप्रिल: '04', मे: '05', जुलै: '07', ऑगस्ट: '08', सप्टेंबर: '09', ऑक्टोबर: '10', नोव्हेंबर: '11', डिसेंबर: '12',
+    डिसेंबरला: '12', डिसेंबरच्या: '12', डिसेंबरचा: '12', डिसेंबरमध्ये: '12', डिसेंबरपर्यंत: '12', डिसेंबरत: '12',
+    जानेवारीला: '01', फेब्रुवारीला: '02', मार्चला: '03', एप्रिलला: '04', ऑक्टोबरला: '10', नोव्हेंबरला: '11',
   };
 
   const monthNamesPattern = Object.keys(MONTH_MAP).join('|');
 
-  // 4. Day + Month + Optional Year (e.g. "15 December 2026", "15 दिसंबर", "15 डिसेंबर 2026")
+  // 4. Day + Month + Optional Year
+  // Matches: "18th December", "18th of December", "18 दिसंबर", "18 दिसंबर को", "18 डिसेंबर", "18 डिसेंबरला", "18 December ला"
   const dayMonthRegex = new RegExp(
-    `(?:^|[^\\d])(\\d{1,2})(?:st|nd|rd|th)?\\s+(${monthNamesPattern})(?:\\s+(202[5-9]))?(?:[^\\w\\u0900-\\u097F]|$)`,
+    `(?:^|[^\\d])(\\d{1,2})(?:st|nd|rd|th)?\\s*(?:of\\s+|च्या\\s+|चा\\s+|की\\s+|का\\s+)?(${monthNamesPattern})(?:ला|च्या|चा|मध्ये|पर्यंत|त|को|की|में|का|के)?(?:\\s+(?:ला|को|रोजी))?(?:\\s+(202[5-9]))?(?:[^\\w\\u0900-\\u097F]|$)`,
     'i'
   );
   const dmMatch = normalized.match(dayMonthRegex);
@@ -357,16 +458,17 @@ export function extractDateFromText(text: string, referenceDate?: Date): string 
     const day = parseInt(dmMatch[1], 10);
     const mKey = dmMatch[2].toLowerCase();
     const month = MONTH_MAP[mKey];
-    let year = dmMatch[3] || '2026';
+    let year = dmMatch[3] || String(ref.getFullYear());
 
     if (day >= 1 && day <= 31 && month) {
       return `${year}-${month}-${String(day).padStart(2, '0')}`;
     }
   }
 
-  // 5. Month + Day + Optional Year (e.g. "December 15 2026", "दिसंबर 15")
+  // 5. Month + Day + Optional Year
+  // Matches: "December 18", "December 18th", "December the 18th", "दिसंबर 18"
   const monthDayRegex = new RegExp(
-    `(?:^|[^\\w\\u0900-\\u097F])(${monthNamesPattern})\\s+(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+(202[5-9]))?(?:[^\\w\\u0900-\\u097F]|$)`,
+    `(?:^|[^\\w\\u0900-\\u097F])(${monthNamesPattern})(?:ला|च्या|चा|मध्ये|पर्यंत|त|को|की|में|का|के)?\\s+(?:the\\s+)?(\\d{1,2})(?:st|nd|rd|th)?(?:\\s+(202[5-9]))?(?:[^\\w\\u0900-\\u097F]|$)`,
     'i'
   );
   const mdMatch = normalized.match(monthDayRegex);
@@ -374,7 +476,7 @@ export function extractDateFromText(text: string, referenceDate?: Date): string 
     const mKey = mdMatch[1].toLowerCase();
     const day = parseInt(mdMatch[2], 10);
     const month = MONTH_MAP[mKey];
-    let year = mdMatch[3] || '2026';
+    let year = mdMatch[3] || String(ref.getFullYear());
 
     if (day >= 1 && day <= 31 && month) {
       return `${year}-${month}-${String(day).padStart(2, '0')}`;
@@ -446,14 +548,20 @@ export function extractSlotFromText(text: string): VendorSlotType | undefined {
 export function extractGuests(text: string): number | undefined {
   const normalized = convertSpokenNumberWords(normalizeDevanagariNumerals(text.toLowerCase()));
 
-  // Explicit patterns: "500 guests", "500 पाहुणे", "500 मेहमान", "500 pax", "500 people"
+  // 1. Prefix pattern: "guest count is 600", "guest count: 600", "guests are 600", "actually the guest count is 600"
+  const prefixMatch = normalized.match(
+    /(?:guest\s*count(?:\s*is|\s*to)?|guests?(?:\s*are|\s*is|\s*:)?|पाहुण्यांची\s*संख्या(?:\s*आहे)?|मेहमानों?\s*की\s*संख्या(?:\s*है)?|logon\s*ki\s*sankhya)\s*[:=\-]?\s*(\d{2,5})/i
+  );
+  if (prefixMatch) return parseInt(prefixMatch[1], 10);
+
+  // 2. Explicit patterns: "500 guests", "500 पाहुणे", "500 मेहमान", "500 pax", "500 people", "500 log", "500 lok"
   const match = normalized.match(
-    /(?:^|[^\d])(\d{2,5})\s*(?:guests?|people|persons?|pax|मेहमान(?:ों)?|पाहुणे|पाहुण्यांचे|पाहुण्यांसाठी|पाहुण्यांना|लोक)(?:[^\w\u0900-\u097F]|$)/i
+    /(?:^|[^\d])(\d{2,5})\s*(?:guests?|people|persons?|pax|log|लोग|lok|लोक|मेहमान(?:ों)?|पाहुणे|पाहुण्यांचे|पाहुण्यांसाठी|पाहुण्यांना)(?:[^\w\u0900-\u097F]|$)/i
   );
   if (match) return parseInt(match[1], 10);
 
-  // If text says "for 500 at 500 per plate"
-  const forMatch = normalized.match(/(?:for|साठी|के लिए)\s+(\d{2,5})\s+(?:guests?|at|@|दर|भाव|रेट)?/i);
+  // 3. If text says "for 500 at 500 per plate" or "for 500 people"
+  const forMatch = normalized.match(/(?:for|साठी|के लिए)\s+(\d{2,5})\s+(?:guests?|people|log|lok|पाहुणे|मेहमान|at|@|दर|भाव|रेट)?/i);
   if (forMatch) {
     const val = parseInt(forMatch[1], 10);
     if (val >= 20 && val <= 10000) return val;
@@ -464,13 +572,24 @@ export function extractGuests(text: string): number | undefined {
 
 /**
  * Extracts price per plate / per head / per person rate
- * Matches: "at ₹500 per plate", "500 per plate", "₹1,200/plate", "1200 प्रति प्लेट", "500 प्लेट प्रमाणे"
+ * Matches: "at ₹500 per plate", "500 per plate", "₹1,200/plate", "1200 प्रति प्लेट", "500 प्लेट प्रमाणे", "pratyek plate 700 rupaye"
  */
 export function extractPricePerPlate(text: string): number | undefined {
   const normalized = convertSpokenNumberWords(normalizeDevanagariNumerals(text.toLowerCase()));
 
+  // 1. Direct rate assignment: "price per plate is 800", "rate per plate is 1200", "plate rate 700"
+  const directMatch = normalized.match(
+    /(?:price\s*per\s*plate|rate\s*per\s*plate|per\s*plate\s*rate|plate\s*rate|दर\s*प्रति\s*प्लेट|प्रति\s*प्लेट\s*दर)\s*(?:is|to|:|as)?\s*(?:₹|rs\.?|inr|रुपये)?\s*(\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d{2,6})/i
+  );
+  if (directMatch) {
+    const cleanNum = directMatch[1].replace(/,/g, '');
+    const val = parseInt(cleanNum, 10);
+    if (val > 0) return val;
+  }
+
+  // 2. Standard format: "₹1,200 per plate", "500 rupees per plate", "1200 प्रति प्लेट", "500 प्लेट प्रमाणे"
   const perPlateMatch = normalized.match(
-    /(?:at|@|दर|भाव|रेट)?\s*(?:₹|rs\.?|inr|रुपये)?\s*(\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d{2,6})\s*(?:₹|rs\.?|rupees|रुपये)?\s*(?:per\s*(?:plate|head|pax|person|thali|guest)|प्रति\s*(?:प्लेट|थाळी|व्यक्ती)|दर\s*(?:प्लेट|थाळी|व्यक्ती)|पर\s*(?:प्लेट|थाळी|व्यक्ती)|\/\s*(?:plate|head|pax|person|thali)|प्लेट\s*प्रमाणे)/i
+    /(?:at|@|दर|भाव|रेट)?\s*(?:₹|rs\.?|inr|रुपये)?\s*(\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d{2,6})\s*(?:₹|rs\.?|rupees|रुपये)?\s*(?:per\s*(?:plate|head|pax|person|thali|guest)|प्रति\s*(?:प्लेट|थाळी|व्यक्ती)|दर\s*(?:प्लेट|थाळी|व्यक्ती)|पर\s*(?:प्लेट|थाळी|व्यक्ती)|प्रत्येक\s*(?:प्लेट|थाळी|व्यक्ती)|pratyek\s*(?:plate|head|pax|person|thali|guest)|\/\s*(?:plate|head|pax|person|thali)|प्लेट\s*प्रमाणे)/i
   );
 
   if (perPlateMatch) {
@@ -479,9 +598,9 @@ export function extractPricePerPlate(text: string): number | undefined {
     if (val > 0) return val;
   }
 
-  // Reversed format: "per plate ₹500", "प्रति प्लेट 500", "/ plate 1200"
+  // 3. Reversed format: "per plate ₹500", "per plate 800", "pratyek plate 700", "प्रति प्लेट 500", "/ plate 1200"
   const reversedMatch = normalized.match(
-    /(?:per\s*(?:plate|head|pax|person|thali|guest)|प्रति\s*(?:प्लेट|थाळी|व्यक्ती)|दर\s*(?:प्लेट|थाळी|व्यक्ती)|पर\s*(?:प्लेट|थाळी|व्यक्ती)|\/\s*(?:plate|head|pax|person|thali)|प्लेट\s*प्रमाणे)\s*(?:at|@|दर|भाव|रेट)?\s*(?:₹|rs\.?|inr|रुपये)?\s*(\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d{2,6})/i
+    /(?:per\s*(?:plate|head|pax|person|thali|guest)|प्रति\s*(?:प्लेट|थाळी|व्यक्ती)|दर\s*(?:प्लेट|थाळी|व्यक्ती)|पर\s*(?:प्लेट|थाळी|व्यक्ती)|प्रत्येक\s*(?:प्लेट|थाळी|व्यक्ती)|pratyek\s*(?:plate|head|pax|person|thali|guest)|\/\s*(?:plate|head|pax|person|thali)|प्लेट\s*प्रमाणे)\s*(?:at|@|दर|भाव|रेट|is|to|as)?\s*(?:₹|rs\.?|inr|रुपये)?\s*(\d{1,2}(?:,\d{2})*,\d{3}|\d{1,3}(?:,\d{3})+|\d{2,6})/i
   );
 
   if (reversedMatch) {
@@ -537,12 +656,13 @@ export function extractAdditionalCharges(text: string): number {
 }
 
 /**
- * Main Multilingual NLU Parser with Strict Parameter Extraction & Clarification Prompts
+ * Main Multilingual NLU Parser with Strict Parameter Extraction, Context State Retention & Clarification Prompts
  */
 export function parseVendorVoiceCommand(
   input: string,
   preferredLang: VoiceLanguage = 'en',
-  referenceDate?: Date
+  referenceDate?: Date,
+  context?: VendorConversationContext
 ): ParsedVoiceCommand {
   const text = input.trim();
   const lower = text.toLowerCase();
@@ -550,12 +670,36 @@ export function parseVendorVoiceCommand(
   // 1. Automatic Language Detection
   const detectedLang = detectLanguage(text, preferredLang);
 
-  const date = extractDateFromText(text, referenceDate);
-  const slot = extractSlotFromText(text);
-  const guestCount = extractGuests(text);
-  const pricePerPlate = extractPricePerPlate(text);
+  const extractedDate = extractDateFromText(text, referenceDate);
+  const extractedSlot = extractSlotFromText(text);
+  let extractedGuests = extractGuests(text);
+  let extractedPricePerPlate = extractPricePerPlate(text);
   const rawAmount = extractAmount(text);
-  const additionalCharges = extractAdditionalCharges(text);
+  const extractedAdditionalCharges = extractAdditionalCharges(text);
+
+  // If in missingField clarification state, extract simple numeric answer
+  if (extractedGuests === undefined && context?.missingField === 'guestCount') {
+    const numMatch = text.match(/\b(\d{2,5})\b/);
+    if (numMatch) {
+      extractedGuests = parseInt(numMatch[1], 10);
+    }
+  }
+
+  if (extractedPricePerPlate === undefined && context?.missingField === 'pricePerPlate') {
+    const numMatch = text.match(/\b(\d{2,6})\b/);
+    if (numMatch) {
+      extractedPricePerPlate = parseInt(numMatch[1], 10);
+    }
+  }
+
+  // Context retention:
+  // If an explicit date was extracted from the current utterance, it overrides previous context (e.g. date override).
+  // If no date was extracted in this utterance, retain the date established in previous turns of the conversation context.
+  const date = extractedDate || context?.date;
+  const slot = extractedSlot || context?.slot;
+  const guestCount = extractedGuests ?? context?.guestCount;
+  const pricePerPlate = extractedPricePerPlate ?? context?.pricePerPlate;
+  const additionalCharges = extractedAdditionalCharges || (context?.additionalCharges || 0);
 
   // Intent 1: Review Quotation
   if (
@@ -577,7 +721,7 @@ export function parseVendorVoiceCommand(
   }
 
   // Intent 2: Create Provisional Quotation / Perform Calculation
-  if (
+  const isQuotationIntent =
     lower.includes('quotation') ||
     lower.includes('quote') ||
     lower.includes('calculate') ||
@@ -586,16 +730,23 @@ export function parseVendorVoiceCommand(
     lower.includes('दरपत्रक') ||
     lower.includes('हिसाब') ||
     lower.includes('गणना') ||
-    pricePerPlate !== undefined ||
-    (guestCount !== undefined && (lower.includes('plate') || lower.includes('प्लेट')))
-  ) {
+    extractedPricePerPlate !== undefined ||
+    (extractedGuests !== undefined && (lower.includes('plate') || lower.includes('प्लेट') || lower.includes('per') || lower.includes('दर') || lower.includes('भाव'))) ||
+    // Continuation/correction in quote context:
+    (context?.intent === 'CREATE_QUOTE' && (extractedGuests !== undefined || extractedPricePerPlate !== undefined || lower.includes('actually') || lower.includes('make it') || lower.includes('count is') || lower.includes('rate is'))) ||
+    (context?.missingField === 'guestCount' && extractedGuests !== undefined) ||
+    (context?.missingField === 'pricePerPlate' && (extractedPricePerPlate !== undefined || rawAmount !== undefined)) ||
+    (context?.pricePerPlate !== undefined && extractedGuests !== undefined) ||
+    (context?.guestCount !== undefined && extractedPricePerPlate !== undefined);
+
+  if (isQuotationIntent) {
     // Check if client name is explicitly mentioned
     let clientName: string | undefined;
     const forMatch = text.match(/(?:for|लागी|साठी|के लिए)\s+([A-Za-z\u0900-\u097F\s]{2,25})/i);
     if (forMatch) {
       const candidate = forMatch[1].trim();
       // Only set if not matching guest/number words
-      if (!candidate.match(/^\d+/) && !candidate.toLowerCase().includes('guest')) {
+      if (!candidate.match(/^\d+/) && !candidate.toLowerCase().includes('guest') && !candidate.toLowerCase().includes('people')) {
         clientName = candidate;
       }
     }
@@ -607,6 +758,7 @@ export function parseVendorVoiceCommand(
         rawText: text,
         detectedLang,
         missingField: 'guestCount',
+        pricePerPlate,
         clarificationPrompt:
           detectedLang === 'mr'
             ? 'कृपया कोटेशनसाठी पाहुण्यांची अचूक संख्या सांगा.'
@@ -670,7 +822,7 @@ export function parseVendorVoiceCommand(
       intent: 'CREATE_QUOTE',
       rawText: text,
       detectedLang,
-      clientName: clientName || 'Client Quotation',
+      clientName: clientName || context?.clientName || 'Client Quotation',
       guestCount,
       pricePerPlate,
       subtotal,
@@ -714,15 +866,35 @@ export function parseVendorVoiceCommand(
   }
 
   // Intent 4: Check Availability
-  if (
+  // Matches "availability", "free", "status", "check", "उपलब्ध", "तपासा", "तपास", "बघा", "चेक", etc.
+  // Also activates on follow-up slot inquiries or date overrides when prior context was CHECK_AVAILABILITY
+  const isAvailabilityInquiry =
     lower.includes('availab') ||
     lower.includes('free') ||
     lower.includes('status') ||
+    lower.includes('check') ||
     lower.includes('उपलब्ध') ||
     lower.includes('खाली') ||
     lower.includes('तपासा') ||
-    lower.includes('चेक')
-  ) {
+    lower.includes('तपास') ||
+    lower.includes('बघा') ||
+    lower.includes('बघ') ||
+    lower.includes('सांगा') ||
+    lower.includes('सांग') ||
+    lower.includes('चेक') ||
+    (context?.intent === 'CHECK_AVAILABILITY' && (extractedDate !== undefined || extractedSlot !== undefined)) ||
+    (context?.intent === 'CHECK_AVAILABILITY' && (
+      lower.includes('morning') ||
+      lower.includes('afternoon') ||
+      lower.includes('evening') ||
+      lower.includes('सकाळ') ||
+      lower.includes('दुपार') ||
+      lower.includes('संध्याकाळ') ||
+      lower.includes('सुबह') ||
+      lower.includes('शाम')
+    ));
+
+  if (isAvailabilityInquiry) {
     if (!date) {
       return {
         intent: 'NEED_CLARIFICATION',
@@ -816,54 +988,95 @@ export function generateVoiceResponse(
       const sBooked = context.secondHalfBooked;
       const dateFormatted = formatDateHuman(d, lang);
 
+      // Specific Slot: FIRST_HALF
+      if (parsed.slot === 'FIRST_HALF') {
+        if (lang === 'mr') {
+          const status = fBooked
+            ? `तुमचा ${dateFormatted} रोजी फर्स्ट-हाफ स्लॉट आधीच बुक आहे.`
+            : `तुमचा ${dateFormatted} रोजी फर्स्ट-हाफ स्लॉट उपलब्ध आहे.`;
+          const msg = `नक्की, मी ${dateFormatted} ची उपलब्धता तपासतो. ${status}`;
+          return { message: msg, speechText: status };
+        }
+        if (lang === 'hi') {
+          const status = fBooked
+            ? `आपका ${dateFormatted} को फर्स्ट-हाफ स्लॉट पहले से बुक है।`
+            : `आपका ${dateFormatted} को फर्स्ट-हाफ स्लॉट उपलब्ध है।`;
+          const msg = `ज़रूर, मैं ${dateFormatted} की उपलब्धता चेक करता हूँ। ${status}`;
+          return { message: msg, speechText: status };
+        }
+        const status = fBooked
+          ? `Your first-half slot on ${dateFormatted} is already booked.`
+          : `Your first-half slot on ${dateFormatted} is available.`;
+        const msg = `Sure, I'll check your availability for ${dateFormatted}. ${status}`;
+        return { message: msg, speechText: status };
+      }
+
+      // Specific Slot: SECOND_HALF
+      if (parsed.slot === 'SECOND_HALF') {
+        if (lang === 'mr') {
+          const status = sBooked
+            ? `तुमचा ${dateFormatted} रोजी सेकंड-हाफ स्लॉट आधीच बुक आहे.`
+            : `तुमचा ${dateFormatted} रोजी सेकंड-हाफ स्लॉट उपलब्ध आहे.`;
+          const msg = `नक्की, मी ${dateFormatted} ची उपलब्धता तपासतो. ${status}`;
+          return { message: msg, speechText: status };
+        }
+        if (lang === 'hi') {
+          const status = sBooked
+            ? `आपका ${dateFormatted} को सेकंड-हाफ स्लॉट पहले से बुक है।`
+            : `आपका ${dateFormatted} को सेकंड-हाफ स्लॉट उपलब्ध है।`;
+          const msg = `ज़रूर, मैं ${dateFormatted} की उपलब्धता चेक करता हूँ। ${status}`;
+          return { message: msg, speechText: status };
+        }
+        const status = sBooked
+          ? `Your second-half slot on ${dateFormatted} is already booked.`
+          : `Your second-half slot on ${dateFormatted} is available.`;
+        const msg = `Sure, I'll check your availability for ${dateFormatted}. ${status}`;
+        return { message: msg, speechText: status };
+      }
+
+      // General / Full Day Slot Status
       if (lang === 'mr') {
+        let statusMsg = '';
         if (fBooked && sBooked) {
-          const msg = `${dateFormatted} रोजी दोन्ही स्लॉट (फर्स्ट हाफ आणि सेकंड हाफ) पूर्णपणे बुक आहेत.`;
-          return { message: msg, speechText: msg };
+          statusMsg = 'दोन्ही स्लॉट (फर्स्ट हाफ आणि सेकंड हाफ) पूर्णपणे बुक आहेत.';
+        } else if (fBooked) {
+          statusMsg = 'फर्स्ट हाफ बुक आहे, परंतु सेकंड हाफ उपलब्ध आहे.';
+        } else if (sBooked) {
+          statusMsg = 'सेकंड हाफ बुक आहे, परंतु फर्स्ट हाफ उपलब्ध आहे.';
+        } else {
+          statusMsg = 'तुमचे दोन्ही स्लॉट (फर्स्ट हाफ व सेकंड हाफ) उपलब्ध आहेत.';
         }
-        if (fBooked) {
-          const msg = `${dateFormatted} रोजी फर्स्ट हाफ बुक आहे, परंतु सेकंड हाफ उपलब्ध आहे.`;
-          return { message: msg, speechText: msg };
-        }
-        if (sBooked) {
-          const msg = `${dateFormatted} रोजी सेकंड हाफ बुक आहे, परंतु फर्स्ट हाफ उपलब्ध आहे.`;
-          return { message: msg, speechText: msg };
-        }
-        const msg = `${dateFormatted} रोजी तुमचे दोन्ही स्लॉट (फर्स्ट हाफ व सेकंड हाफ) उपलब्ध आहेत.`;
+        const msg = `नक्की, मी ${dateFormatted} ची उपलब्धता तपासतो. ${dateFormatted} रोजी ${statusMsg}`;
         return { message: msg, speechText: msg };
       }
 
       if (lang === 'hi') {
+        let statusMsg = '';
         if (fBooked && sBooked) {
-          const msg = `${dateFormatted} के लिए दोनों स्लॉट्स (फर्स्ट हाफ और सेकंड हाफ) पूरी तरह से बुक हैं।`;
-          return { message: msg, speechText: msg };
+          statusMsg = 'दोनों स्लॉट्स (फर्स्ट हाफ और सेकंड हाफ) पूरी तरह से बुक हैं।';
+        } else if (fBooked) {
+          statusMsg = 'फर्स्ट हाफ बुक है, लेकिन सेकंड हाफ उपलब्ध है।';
+        } else if (sBooked) {
+          statusMsg = 'सेकंड हाफ बुक है, लेकिन फर्स्ट हाफ उपलब्ध है।';
+        } else {
+          statusMsg = 'आपके दोनों स्लॉट्स (फर्स्ट हाफ और सेकंड हाफ) उपलब्ध हैं।';
         }
-        if (fBooked) {
-          const msg = `${dateFormatted} को फर्स्ट हाफ बुक है, लेकिन सेकंड हाफ उपलब्ध है।`;
-          return { message: msg, speechText: msg };
-        }
-        if (sBooked) {
-          const msg = `${dateFormatted} को सेकंड हाफ बुक है, लेकिन फर्स्ट हाफ उपलब्ध है।`;
-          return { message: msg, speechText: msg };
-        }
-        const msg = `${dateFormatted} के लिए आपके दोनों स्लॉट्स (फर्स्ट हाफ और सेकंड हाफ) उपलब्ध हैं।`;
+        const msg = `ज़रूर, मैं ${dateFormatted} की उपलब्धता चेक करता हूँ। ${dateFormatted} को ${statusMsg}`;
         return { message: msg, speechText: msg };
       }
 
       // English
+      let statusMsg = '';
       if (fBooked && sBooked) {
-        const msg = `On ${dateFormatted}, both First Half and Second Half slots are fully booked.`;
-        return { message: msg, speechText: msg };
+        statusMsg = 'both First Half and Second Half slots are fully booked.';
+      } else if (fBooked) {
+        statusMsg = 'First Half is booked, but Second Half is available.';
+      } else if (sBooked) {
+        statusMsg = 'Second Half is booked, but First Half is available.';
+      } else {
+        statusMsg = 'both First Half and Second Half slots are available.';
       }
-      if (fBooked) {
-        const msg = `On ${dateFormatted}, First Half is booked, but Second Half is available.`;
-        return { message: msg, speechText: msg };
-      }
-      if (sBooked) {
-        const msg = `On ${dateFormatted}, Second Half is booked, but First Half is available.`;
-        return { message: msg, speechText: msg };
-      }
-      const msg = `On ${dateFormatted}, both First Half and Second Half slots are available.`;
+      const msg = `Sure, I'll check your availability for ${dateFormatted}. On ${dateFormatted}, ${statusMsg}`;
       return { message: msg, speechText: msg };
     }
 
@@ -919,18 +1132,30 @@ export function generateVoiceResponse(
       const amtStr = `₹${totalAmt.toLocaleString('en-IN')}`;
 
       if (lang === 'mr') {
-        const msg = `${guests} पाहुण्यांसाठी ₹${rate?.toLocaleString('en-IN')} प्रति प्लेट प्रमाणे तुमचे तात्पुरते कोटेशन ${amtStr} आहे. आपण याची तपासणी करू इच्छिता का?`;
+        if (rate && guests) {
+          const msg = `${guests} पाहुण्यांसाठी ₹${rate?.toLocaleString('en-IN')} प्रति प्लेट प्रमाणे तुमचे तात्पुरते कोटेशन ${amtStr} आहे. आपण याची तपासणी करू इच्छिता का?`;
+          return { message: msg, speechText: msg };
+        }
+        const msg = `${parsed.serviceCategory || 'सेवे'}साठी तुमचे तात्पुरते कोटेशन ${amtStr} आहे. आपण याची तपासणी करू इच्छिता का?`;
         return { message: msg, speechText: msg };
       }
 
       if (lang === 'hi') {
-        const msg = `${guests} मेहमानों का ₹${rate?.toLocaleString('en-IN')} प्रति प्लेट के हिसाब से आपका प्रोविज़नल कोटेशन ${amtStr} है। क्या आप इसकी समीक्षा करना चाहते हैं?`;
+        if (rate && guests) {
+          const msg = `${guests} मेहमानों का ₹${rate?.toLocaleString('en-IN')} प्रति प्लेट के हिसाब से आपका प्रोविज़नल कोटेशन ${amtStr} है। क्या आप इसकी समीक्षा करना चाहते हैं?`;
+          return { message: msg, speechText: msg };
+        }
+        const msg = `${parsed.serviceCategory || 'सेवा'} के लिए आपका प्रोविज़नल कोटेशन ${amtStr} है। क्या आप इसकी समीक्षा करना चाहते हैं?`;
         return { message: msg, speechText: msg };
       }
 
       // English - Exact requested response style:
       // "Your provisional quotation for 500 guests at ₹500 per plate is ₹2,50,000. Would you like to review it?"
-      const msg = `Your provisional quotation for ${guests} guests at ₹${rate?.toLocaleString('en-IN')} per plate is ${amtStr}. Would you like to review it?`;
+      if (rate && guests) {
+        const msg = `Your provisional quotation for ${guests} guests at ₹${rate?.toLocaleString('en-IN')} per plate is ${amtStr}. Would you like to review it?`;
+        return { message: msg, speechText: msg };
+      }
+      const msg = `Your provisional quotation for ${parsed.serviceCategory || 'the requested services'} is ${amtStr}. Would you like to review it?`;
       return { message: msg, speechText: msg };
     }
 

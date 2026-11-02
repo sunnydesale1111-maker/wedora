@@ -65,6 +65,7 @@ const nav: NavItem[] = [
 function PlannerPortal() {
   const [tab, setTab] = useState("events");
   const {
+    session,
     events,
     activeEvent,
     activeEventId,
@@ -149,18 +150,12 @@ function PlannerPortal() {
                   <Users className="size-3.5 text-navy/70" /> Manage Clients ({organizerClients.length})
                 </Button>
                 <Button
-                  variant="outline"
-                  onClick={() => setShowAIEventModal(true)}
-                  className="border-gold text-plum hover:bg-gold-soft font-semibold gap-1.5 shadow-2xs cursor-pointer text-xs"
-                >
-                  <Sparkles className="size-4 text-gold" /> Create Event with AI
-                </Button>
-                <Button
                   variant="hero"
-                  onClick={() => setShowNewEventModal(true)}
-                  className="gap-1.5 shadow-2xs cursor-pointer text-xs"
+                  data-testid="create-event-btn"
+                  onClick={() => setShowAIEventModal(true)}
+                  className="gap-1.5 shadow-2xs cursor-pointer text-xs bg-gold text-plum hover:bg-gold-light font-bold"
                 >
-                  <Plus className="size-4" /> Create New Client Event
+                  <Plus className="size-4" /> Create Event
                 </Button>
               </div>
             }
@@ -444,6 +439,7 @@ function PlannerPortal() {
       <CreateEventAIModal
         isOpen={showAIEventModal}
         onClose={() => setShowAIEventModal(false)}
+        organizerUserId={session?.id || 'planner-aditi'}
         onEventCreated={(eventPayload) => {
           const created = addEvent(eventPayload);
           setActiveEventId(created.id);

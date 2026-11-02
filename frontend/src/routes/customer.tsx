@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   Heart,
@@ -57,6 +57,7 @@ const nav: NavItem[] = [
 ];
 
 function CustomerPortal() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState("hub");
   const [isManageProfilesModalOpen, setIsManageProfilesModalOpen] = useState(false);
   const [manageModalAddMode, setManageModalAddMode] = useState(false);
@@ -68,6 +69,7 @@ function CustomerPortal() {
     bookings,
     addEvent,
     loginAsRole,
+    logout,
     customerProfiles,
     activeCustomerProfiles,
     activeProfileId,

@@ -30,7 +30,7 @@ export interface PopulatedCollaboration {
 /**
  * Base manual collaborations for Aditi Sharma (Lead Event Planner)
  */
-const BASE_MANUAL_COLLABORATIONS: PlannerCollaborationRecord[] = [
+export const BASE_MANUAL_COLLABORATIONS: PlannerCollaborationRecord[] = [
   // 1. Royal Feast Catering (Baner, Pune)
   {
     id: 'collab-pun-cat-01-baner',

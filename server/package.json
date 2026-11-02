@@ -14,12 +14,19 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "test:acceptance": "tsx tests/acceptance.test.ts"
   },
-  "keywords": ["wedding", "timeline", "orchestrator", "ai", "b2b2c"],
+  "keywords": [
+    "wedding",
+    "timeline",
+    "orchestrator",
+    "ai",
+    "b2b2c"
+  ],
   "author": "Antigravity",
   "license": "ISC",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.4.1",
+    "@supabase/supabase-js": "^2.118.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

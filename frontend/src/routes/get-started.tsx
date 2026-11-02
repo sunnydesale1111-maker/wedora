@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Logo, Mandala } from "@/components/brand";
 import { useDemoSession, UserRole } from "@/hooks/useDemoSession";
+import { loginUser, registerUser, requestPasswordReset } from "@/lib/supabaseAuth";
+import { AlertCircle, Loader2, KeyRound, X } from "lucide-react";
 
 export const Route = createFileRoute("/get-started")({
   head: () => ({
@@ -37,12 +39,20 @@ type OnboardingStep = "root" | "planning" | "auth_form";
 function GetStarted() {
   const navigate = useNavigate();
   const search = Route.useSearch();
-  const { loginAsRole } = useDemoSession();
+  const { loginAsRole, loginAsAuthenticated } = useDemoSession();
 
   const initialRole: UserRole = search.role || "PLANNER";
   const [step, setStep] = useState<OnboardingStep>(search.role ? "auth_form" : "root");
   const [selectedRole, setSelectedRole] = useState<UserRole>(initialRole);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
+
+  // Form states & feedback
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetStatus, setResetStatus] = useState<string | null>(null);
 
   // Form fields
   const [fullName, setFullName] = useState(() => {
@@ -92,30 +102,113 @@ function GetStarted() {
     }
   };
 
-  const handleSubmitForm = (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedRole === "CUSTOMER") {
-      if (email.toLowerCase().includes("aniket")) {
-        loginAsRole("CUSTOMER", "aniket");
-      } else if (email.toLowerCase().includes("rohil") || email.toLowerCase().includes("rohan") || email.toLowerCase().includes("customer@weddingorchestrator")) {
-        loginAsRole("CUSTOMER", "rohil");
-      } else {
-        loginAsRole("CUSTOMER", {
-          name: fullName.trim() || email.split("@")[0],
-          email: email.trim(),
-        });
-      }
-      navigate({ to: "/customer" });
-      return;
-    }
+    setErrorMessage(null);
+    setSuccessMessage(null);
 
-    loginAsRole(selectedRole);
-    if (selectedRole === "VENDOR") {
-      navigate({ to: "/vendor" });
-    } else if (selectedRole === "PLANNER") {
-      navigate({ to: "/planner" });
+    // If using default demo password & email, preserve instant demo login
+    const isDemoCredential =
+      password === "Demo@12345" &&
+      (email.includes("kulkarni") ||
+        email.includes("weddingorchestrator") ||
+        email.includes("royalfeast") ||
+        email.includes("tribhavan"));
+
+    if (authMode === "login") {
+      if (isDemoCredential) {
+        if (selectedRole === "CUSTOMER") {
+          if (email.toLowerCase().includes("aniket")) {
+            loginAsRole("CUSTOMER", "aniket");
+          } else {
+            loginAsRole("CUSTOMER", "rohil");
+          }
+          navigate({ to: "/customer" });
+          return;
+        }
+        loginAsRole(selectedRole);
+        if (selectedRole === "VENDOR") navigate({ to: "/vendor" });
+        else navigate({ to: "/planner" });
+        return;
+      }
+
+      // Real Supabase Authentication
+      setIsLoading(true);
+      const res = await loginUser({ email, password });
+      setIsLoading(false);
+
+      if (res.error) {
+        if (res.error.toLowerCase().includes("email not confirmed")) {
+          setErrorMessage(
+            'Email confirmation is required. Please check your inbox or disable "Confirm email" in Supabase Authentication -> Providers -> Email.'
+          );
+        } else {
+          setErrorMessage(res.error);
+        }
+        return;
+      }
+
+      if (res.user) {
+        await loginAsAuthenticated(res.user);
+        if (res.user.role === "VENDOR") {
+          navigate({ to: "/vendor" });
+        } else if (res.user.role === "PLANNER") {
+          navigate({ to: "/planner" });
+        } else {
+          navigate({ to: "/customer" });
+        }
+      }
     } else {
-      navigate({ to: "/customer" });
+      // Registration with Supabase Auth
+      if (password !== confirmPassword) {
+        setErrorMessage("Passwords do not match. Please verify and try again.");
+        return;
+      }
+      if (password.length < 6) {
+        setErrorMessage("Password must be at least 6 characters long.");
+        return;
+      }
+
+      setIsLoading(true);
+      const res = await registerUser({
+        email,
+        password,
+        name: fullName,
+        role: selectedRole,
+      });
+      setIsLoading(false);
+
+      if (res.error) {
+        setErrorMessage(res.error);
+        return;
+      }
+
+      if (res.needsEmailConfirmation) {
+        setSuccessMessage(
+          'Registration successful! If "Confirm email" is enabled in Supabase, please check your inbox to confirm your account before logging in.'
+        );
+      } else if (res.user) {
+        await loginAsAuthenticated(res.user);
+        if (res.user.role === "VENDOR") {
+          navigate({ to: "/vendor" });
+        } else if (res.user.role === "PLANNER") {
+          navigate({ to: "/planner" });
+        } else {
+          navigate({ to: "/customer" });
+        }
+      }
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail) return;
+    setResetStatus("Sending password reset email...");
+    const res = await requestPasswordReset(resetEmail);
+    if (res.error) {
+      setResetStatus(`Error: ${res.error}`);
+    } else {
+      setResetStatus("Password reset link sent! Check your inbox.");
     }
   };
 
@@ -345,6 +438,20 @@ function GetStarted() {
               </div>
             </div>
 
+            {errorMessage && (
+              <div className="mb-4 rounded-xl border border-rose-300 bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-800 dark:text-rose-200 flex items-start gap-2">
+                <AlertCircle className="size-4 shrink-0 text-rose-600 mt-0.5" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+
+            {successMessage && (
+              <div className="mb-4 rounded-xl border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 p-3 text-xs text-emerald-800 dark:text-emerald-200 flex items-start gap-2">
+                <CheckCircle2 className="size-4 shrink-0 text-emerald-600 mt-0.5" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
             {/* Login / Register Toggle Tabs */}
             <div className="flex rounded-xl bg-secondary p-1 mb-5 text-xs">
               <button
@@ -407,7 +514,9 @@ function GetStarted() {
                       href="#forgot"
                       onClick={(e) => {
                         e.preventDefault();
-                        alert("Demo password reset simulated. Use demo login or any mock password.");
+                        setResetEmail(email);
+                        setResetStatus(null);
+                        setIsResetModalOpen(true);
                       }}
                       className="text-[11px] text-plum hover:underline"
                     >
@@ -441,8 +550,15 @@ function GetStarted() {
                 </div>
               )}
 
-              <Button type="submit" variant="hero" className="w-full text-xs py-2.5 mt-2">
-                {authMode === "login" ? "Sign In to Dashboard" : "Create Account & Enter"}
+              <Button type="submit" variant="hero" disabled={isLoading} className="w-full text-xs py-2.5 mt-2 flex items-center justify-center gap-1.5">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="size-3.5 animate-spin" />
+                    <span>Please wait...</span>
+                  </>
+                ) : (
+                  <span>{authMode === "login" ? "Sign In to Dashboard" : "Create Account & Enter"}</span>
+                )}
               </Button>
             </form>
 
@@ -454,6 +570,61 @@ function GetStarted() {
               >
                 <ArrowLeft className="size-3.5" /> Change Persona
               </button>
+            </div>
+          </div>
+        )}
+      {/* Password Reset Modal */}
+        {isResetModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+            <div className="w-full max-w-sm rounded-3xl border bg-card p-6 shadow-2xl text-left relative animate-scale-in">
+              <button
+                type="button"
+                onClick={() => setIsResetModalOpen(false)}
+                className="absolute top-4 right-4 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex size-9 items-center justify-center rounded-full bg-gold-soft text-gold">
+                  <KeyRound className="size-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-plum text-base">Reset Password</h3>
+                  <p className="text-[11px] text-muted-foreground">Receive a secure recovery email from Wedora</p>
+                </div>
+              </div>
+              <form onSubmit={handleResetPassword} className="space-y-3 mt-4 text-xs">
+                <div>
+                  <label className="block text-navy font-medium mb-1">Your Registered Email:</label>
+                  <input
+                    type="email"
+                    required
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    className="w-full rounded-xl border bg-background px-3 py-2 text-xs outline-none focus:border-gold"
+                  />
+                </div>
+                {resetStatus && (
+                  <div className="text-[11px] font-medium p-2 rounded-lg bg-secondary text-navy">
+                    {resetStatus}
+                  </div>
+                )}
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsResetModalOpen(false)}
+                    className="text-xs"
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" variant="hero" size="sm" className="text-xs">
+                    Send Link
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}

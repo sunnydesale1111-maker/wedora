@@ -21,11 +21,13 @@ export interface ProvisionalQuotationData {
   clientName: string;
   eventName: string;
   date: string;
+  location?: string;
   guestCount: number;
   pricePerPlate?: number;
   serviceCategory: string;
   quotedAmount: number;
   additionalCharges: number;
+  taxAmount?: number;
   serviceScope: string;
   includedServices: string[];
 }
@@ -133,8 +135,8 @@ export function QuotationReviewModal({
               <h3 className="text-xl font-display text-plum font-semibold">
                 Quotation Review & Approval
               </h3>
-              <span className="rounded-full bg-gold-soft text-navy px-2.5 py-0.5 text-[10px] font-bold border border-gold/40 uppercase tracking-wider">
-                Automated Calculation
+              <span className="rounded-full bg-amber-100 text-amber-800 px-2.5 py-0.5 text-[10px] font-bold border border-amber-300 uppercase tracking-wider">
+                Status: Draft / Provisional
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
@@ -154,10 +156,14 @@ export function QuotationReviewModal({
         ) : (
           <form onSubmit={handleConfirmApproval} className="space-y-4 mt-4">
             {/* Context Summary */}
-            <div className="rounded-2xl bg-secondary/50 p-4 border grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="rounded-2xl bg-secondary/50 p-4 border grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <span className="text-muted-foreground block text-[11px] font-medium">Vendor:</span>
+                <span className="font-semibold text-plum">{provisionalQuote.vendorBusinessName}</span>
+              </div>
               <div>
                 <span className="text-muted-foreground block text-[11px] font-medium">Customer:</span>
-                <span className="font-semibold text-plum">{provisionalQuote.clientName}</span>
+                <span className="font-semibold text-navy">{provisionalQuote.clientName}</span>
               </div>
               <div>
                 <span className="text-muted-foreground block text-[11px] font-medium">Event:</span>
@@ -166,6 +172,10 @@ export function QuotationReviewModal({
               <div>
                 <span className="text-muted-foreground block text-[11px] font-medium">Target Date:</span>
                 <span className="font-semibold text-navy">{provisionalQuote.date}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[11px] font-medium">Location:</span>
+                <span className="font-semibold text-navy">{provisionalQuote.location || 'Baner, Pune'}</span>
               </div>
               <div>
                 <span className="text-muted-foreground block text-[11px] font-medium">Service Category:</span>

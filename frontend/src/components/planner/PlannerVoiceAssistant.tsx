@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VoiceLanguage } from '@/utils/vendorVoiceNlu';
+import { speakStandardText, stopStandardSpeaking, WEDORA_VOICE_CONFIG } from '@/utils/sharedVoiceConfig';
 import {
   parsePlannerVoiceCommand,
   ParsedPlannerCommand,
@@ -56,18 +57,33 @@ export const PlannerVoiceAssistant: React.FC<PlannerVoiceAssistantProps> = ({
       if (SpeechRecognition) {
         const recognition = new SpeechRecognition();
         recognition.continuous = false;
-        recognition.interimResults = false;
+        recognition.interimResults = true;
         recognition.lang =
           detectedLang === 'mr' ? 'mr-IN' : detectedLang === 'hi' ? 'hi-IN' : 'en-IN';
 
-        recognition.onstart = () => setIsListening(true);
+        recognition.onstart = () => {
+          stopStandardSpeaking();
+          setIsListening(true);
+        };
         recognition.onend = () => setIsListening(false);
         recognition.onerror = () => setIsListening(false);
 
         recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setInputText(transcript);
-          handleExecute(transcript);
+          let currentInterim = '';
+          let finalTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              finalTranscript += event.results[i][0].transcript;
+            } else {
+              currentInterim += event.results[i][0].transcript;
+            }
+          }
+          if (finalTranscript) {
+            setInputText(finalTranscript);
+            handleExecute(finalTranscript);
+          } else if (currentInterim) {
+            setInputText(currentInterim);
+          }
         };
 
         recognitionRef.current = recognition;
@@ -83,23 +99,21 @@ export const PlannerVoiceAssistant: React.FC<PlannerVoiceAssistantProps> = ({
     };
   }, [detectedLang]);
 
-  // Text-to-speech speaker
+  // Standardized Text-to-speech speaker (0.85x speed across all dashboards)
   const speakText = (text: string, lang: VoiceLanguage) => {
-    if (!speechEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+    if (!speechEnabled || typeof window === 'undefined') return;
 
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = lang === 'mr' ? 'mr-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN';
-    utterance.rate = 1.0;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
+    speakStandardText(text, lang, {
+      rate: WEDORA_VOICE_CONFIG.speakingRate,
+      pitch: WEDORA_VOICE_CONFIG.pitch,
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false),
+    });
   };
 
   const toggleListening = () => {
+    stopStandardSpeaking();
     if (isListening) {
       try {
         recognitionRef.current?.stop();
@@ -239,17 +253,31 @@ export const PlannerVoiceAssistant: React.FC<PlannerVoiceAssistantProps> = ({
         ))}
       </div>
 
-      {/* WhatsApp-Style Unified Input Bar */}
+      {/* WhatsApp-Style Unified Input Bar: Message Input -> Mic -> Send */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           handleExecute();
         }}
         className="flex items-center gap-2 pt-1"
+        data-testid="planner-input-form"
       >
-        {/* Mic Button */}
+        {/* 1. Message Text Input (occupies available width) */}
+        <div className="relative flex-1 min-w-0" data-testid="planner-input-container">
+          <input
+            type="text"
+            data-testid="planner-message-input"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Ask in English, Hindi, or Marathi (e.g. 'Show vendors in Baner, Pune')..."
+            className="w-full rounded-full border border-border bg-card px-4 py-2.5 text-xs sm:text-sm text-foreground focus:outline-none focus:border-gold shadow-2xs pr-4"
+          />
+        </div>
+
+        {/* 2. Microphone Button (immediately after text input) */}
         <button
           type="button"
+          data-testid="planner-mic-button"
           onClick={toggleListening}
           className={`size-11 rounded-full flex items-center justify-center transition shadow-xs shrink-0 ${
             isListening
@@ -257,27 +285,20 @@ export const PlannerVoiceAssistant: React.FC<PlannerVoiceAssistantProps> = ({
               : 'bg-gold-soft hover:bg-gold/25 text-gold border border-gold/40'
           }`}
           title={isListening ? 'Listening... click to stop' : 'Click to speak'}
+          aria-label={isListening ? 'Stop listening' : 'Start voice input'}
         >
           {isListening ? <Mic className="size-5" /> : <Mic className="size-5" />}
         </button>
 
-        {/* Text Input */}
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="Ask in English, Hindi, or Marathi (e.g. 'Show vendors in Baner, Pune')..."
-            className="w-full rounded-full border border-border bg-card px-4 py-2.5 text-xs sm:text-sm text-foreground focus:outline-none focus:border-gold shadow-2xs pr-10"
-          />
-        </div>
-
-        {/* Send Button */}
+        {/* 3. Send Button (immediately after microphone) */}
         <Button
           type="submit"
+          data-testid="planner-send-button"
           variant="hero"
           className="size-11 rounded-full p-0 flex items-center justify-center shrink-0"
           disabled={!inputText.trim()}
+          title="Send message"
+          aria-label="Send message"
         >
           <Send className="size-4" />
         </Button>
