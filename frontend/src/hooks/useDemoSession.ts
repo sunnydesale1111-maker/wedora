@@ -3,9 +3,20 @@ import { City, AvailabilityStatus, Vendor } from '../types/vendor';
 import { WeddingEvent, TimelineTask } from '../types/event';
 import { Inquiry, Quotation, Booking, SimulatedPayment } from '../types/booking';
 import { ShortlistItem } from '../types/shortlist';
+import {
+  CustomerProfile,
+  OrganizerClientProfile,
+  DEFAULT_PRIMARY_PERMISSIONS,
+  DEFAULT_FAMILY_PERMISSIONS,
+  MAX_ADDITIONAL_FAMILY_PROFILES,
+} from '../types/profile';
 import { INITIAL_DEMO_EVENTS, INITIAL_TIMELINE_TASKS } from '../data/demoEvents';
 import { INITIAL_INQUIRIES, INITIAL_QUOTATIONS, INITIAL_BOOKINGS, INITIAL_PAYMENTS } from '../data/demoBookings';
 import { INITIAL_DEMO_SHORTLIST } from '../data/demoShortlist';
+import {
+  INITIAL_DEMO_CUSTOMER_PROFILES,
+  INITIAL_DEMO_ORGANIZER_CLIENTS,
+} from '../data/demoProfiles';
 import { getSavedCity, saveCity } from '../utils/locationHelpers';
 import { CalendarOverrides } from '../utils/vendorFilters';
 
@@ -29,6 +40,10 @@ const STORAGE_KEYS = {
   TIMELINE: 'wedora_timeline',
   CALENDAR_OVERRIDES: 'wedora_calendar_overrides',
   SHORTLIST: 'wedora_shortlist',
+  CUSTOMER_PROFILES: 'wedora_customer_profiles',
+  ACTIVE_PROFILE_ID: 'wedora_active_profile_id',
+  ORGANIZER_CLIENTS: 'wedora_organizer_clients',
+  ACTIVE_CLIENT_ID: 'wedora_active_client_id',
 };
 
 function loadStored<T>(key: string, defaultValue: T): T {
@@ -70,6 +85,22 @@ export function useDemoSession() {
     loadStored(STORAGE_KEYS.SHORTLIST, INITIAL_DEMO_SHORTLIST)
   );
 
+  // Part A: Customer Multiple Profiles State
+  const [customerProfiles, setCustomerProfiles] = useState<CustomerProfile[]>(() =>
+    loadStored(STORAGE_KEYS.CUSTOMER_PROFILES, INITIAL_DEMO_CUSTOMER_PROFILES)
+  );
+  const [activeProfileId, setActiveProfileIdState] = useState<string>(() =>
+    loadStored(STORAGE_KEYS.ACTIVE_PROFILE_ID, 'prof-rohan-primary')
+  );
+
+  // Part B: Organizer Multiple Client Profiles State
+  const [organizerClients, setOrganizerClients] = useState<OrganizerClientProfile[]>(() =>
+    loadStored(STORAGE_KEYS.ORGANIZER_CLIENTS, INITIAL_DEMO_ORGANIZER_CLIENTS)
+  );
+  const [activeClientId, setActiveClientIdState] = useState<string>(() =>
+    loadStored(STORAGE_KEYS.ACTIVE_CLIENT_ID, 'client-01')
+  );
+
   // Sync across tabs/windows
   useEffect(() => {
     const handleSync = (e: Event) => {
@@ -83,6 +114,8 @@ export function useDemoSession() {
         setTimelineTasks(loadStored(STORAGE_KEYS.TIMELINE, INITIAL_TIMELINE_TASKS));
         setCalendarOverrides(loadStored(STORAGE_KEYS.CALENDAR_OVERRIDES, {}));
         setShortlist(loadStored(STORAGE_KEYS.SHORTLIST, INITIAL_DEMO_SHORTLIST));
+        setCustomerProfiles(loadStored(STORAGE_KEYS.CUSTOMER_PROFILES, INITIAL_DEMO_CUSTOMER_PROFILES));
+        setOrganizerClients(loadStored(STORAGE_KEYS.ORGANIZER_CLIENTS, INITIAL_DEMO_ORGANIZER_CLIENTS));
       }
     };
     const handleCitySync = (e: Event) => {
@@ -118,7 +151,7 @@ export function useDemoSession() {
       const userName = (user.name || '').toLowerCase().trim();
       const eventOwnerName = (event.ownerName || '').toLowerCase().trim();
 
-      // Rohil Kulkarni check (supports aliases: rohil@kulkarni.com, customer@weddingorchestrator.com, rohan.p@gmail.com)
+      // Rohan Kulkarni check (supports aliases: rohil@kulkarni.com, customer@weddingorchestrator.com, rohan.p@gmail.com)
       const isUserRohil =
         userEmail === 'rohil@kulkarni.com' ||
         userEmail === 'customer@weddingorchestrator.com' ||
@@ -139,7 +172,7 @@ export function useDemoSession() {
       }
 
       // For Aniket Tribhavan and any new registered customer:
-      // Strictly match userEmail or explicit ownerName. Never match Rohil's event!
+      // Strictly match userEmail or explicit ownerName. Never match Rohan's event!
       if (isEventRohil) return false;
 
       return (
@@ -150,18 +183,76 @@ export function useDemoSession() {
     []
   );
 
-  // Filtered customer events for the logged-in customer
+  // Active customer profiles accessible to the currently logged in customer
+  const activeCustomerProfiles = useMemo<CustomerProfile[]>(() => {
+    if (session.role !== 'CUSTOMER') return [];
+
+    const userEmail = (session.email || '').toLowerCase().trim();
+    const isUserRohil =
+      userEmail === 'rohil@kulkarni.com' ||
+      userEmail === 'customer@weddingorchestrator.com' ||
+      userEmail === 'rohan.p@gmail.com' ||
+      session.name.toLowerCase().includes('rohil') ||
+      session.name.toLowerCase().includes('rohan');
+
+    if (isUserRohil) {
+      // Rohan's primary and family profiles
+      return customerProfiles.filter(
+        (p) =>
+          p.primaryUserId === 'rohil@kulkarni.com' ||
+          p.email === 'rohil@kulkarni.com' ||
+          p.email === userEmail
+      );
+    }
+
+    // For Aniket Tribhavan or other new customers
+    const userProfiles = customerProfiles.filter(
+      (p) => p.primaryUserId === userEmail || p.email === userEmail
+    );
+
+    if (userProfiles.length === 0) {
+      // Auto-generate primary profile for new registered customer
+      const defaultPrimary: CustomerProfile = {
+        id: `prof-${userEmail.replace(/[^a-zA-Z0-9]/g, '-')}-primary`,
+        primaryUserId: userEmail,
+        name: session.name || 'Primary Account',
+        email: userEmail,
+        relationship: 'Primary Account Holder',
+        avatar: 'avatar-1',
+        role: 'PRIMARY',
+        permissions: DEFAULT_PRIMARY_PERMISSIONS,
+        sharedEventIds: [],
+        createdAt: new Date().toISOString(),
+      };
+      return [defaultPrimary];
+    }
+
+    return userProfiles;
+  }, [session, customerProfiles]);
+
+  // Active Customer Profile Resolution
+  const activeCustomerProfile = useMemo<CustomerProfile | null>(() => {
+    if (session.role !== 'CUSTOMER') return null;
+    const profiles = activeCustomerProfiles;
+    if (profiles.length === 0) return null;
+    return profiles.find((p) => p.id === activeProfileId) || profiles[0];
+  }, [session.role, activeCustomerProfiles, activeProfileId]);
+
+  // Filtered customer events for the logged-in customer and active profile
   const customerEvents = useMemo(() => {
     if (session.role !== 'CUSTOMER') return events;
-    return events.filter((e) => isOwnerOfEvent(e, session));
-  }, [events, session, isOwnerOfEvent]);
+    const owned = events.filter((e) => isOwnerOfEvent(e, session));
+
+    // If active profile is a FAMILY_MEMBER, strictly restrict to sharedEventIds!
+    if (activeCustomerProfile && activeCustomerProfile.role === 'FAMILY_MEMBER') {
+      const allowedIds = activeCustomerProfile.sharedEventIds || [];
+      return owned.filter((e) => allowedIds.includes(e.id));
+    }
+
+    return owned;
+  }, [events, session, isOwnerOfEvent, activeCustomerProfile]);
 
   // Active event resolution:
-  // If user is CUSTOMER:
-  //   - If they have events, active event is their matched event.
-  //   - If they have NO events (Aniket or New Customer), activeEvent is null.
-  // If user is PLANNER:
-  //   - Defaults to events.find(e => e.id === activeEventId) || events[0].
   const activeEvent = useMemo<WeddingEvent | null>(() => {
     if (session.role === 'CUSTOMER') {
       if (customerEvents.length === 0) return null;
@@ -170,8 +261,285 @@ export function useDemoSession() {
     return events.find((e) => e.id === activeEventId) || events[0];
   }, [session.role, customerEvents, events, activeEventId]);
 
+  // Role Permissions
+  const isFamilyMember = activeCustomerProfile?.role === 'FAMILY_MEMBER';
+  const canMakeBookings =
+    session.role === 'PLANNER' ||
+    (session.role === 'CUSTOMER' && activeCustomerProfile?.permissions.canMakeBookings !== false);
+  const canManagePayments =
+    session.role === 'PLANNER' ||
+    (session.role === 'CUSTOMER' && activeCustomerProfile?.permissions.canManagePayments !== false);
+  const canModifyEvents =
+    session.role === 'PLANNER' ||
+    (session.role === 'CUSTOMER' && activeCustomerProfile?.permissions.canManageEvents !== false);
+  const canModifyBudgets =
+    session.role === 'PLANNER' ||
+    (session.role === 'CUSTOMER' && activeCustomerProfile?.permissions.canModifyBudgets !== false);
+  const canUpdateTasks =
+    session.role === 'PLANNER' ||
+    (session.role === 'CUSTOMER' && activeCustomerProfile?.permissions.canUpdateTasks !== false);
+  const canManageProfiles =
+    session.role === 'CUSTOMER' && activeCustomerProfile?.role === 'PRIMARY';
+
+  // --- Customer Profile Management Methods ---
+  const addFamilyProfile = useCallback(
+    (payload: {
+      name: string;
+      email: string;
+      relationship?: string;
+      avatar?: string;
+      canViewBudget?: boolean;
+      sharedEventIds?: string[];
+    }) => {
+      if (session.role !== 'CUSTOMER' || activeCustomerProfile?.role !== 'PRIMARY') {
+        throw new Error('Only the primary account holder can add family profiles.');
+      }
+
+      const userEmail = (session.email || '').toLowerCase().trim();
+      const existingFamily = customerProfiles.filter(
+        (p) =>
+          (p.primaryUserId === userEmail ||
+            (userEmail.includes('rohil') && p.primaryUserId.includes('kulkarni'))) &&
+          p.role === 'FAMILY_MEMBER'
+      );
+
+      // Acceptance Criteria: Up to 5 additional family profiles; 6th is strictly blocked!
+      if (existingFamily.length >= MAX_ADDITIONAL_FAMILY_PROFILES) {
+        throw new Error(
+          `A primary customer account can have up to ${MAX_ADDITIONAL_FAMILY_PROFILES} additional family profiles (maximum reached).`
+        );
+      }
+
+      const newProfile: CustomerProfile = {
+        id: `fam-${Date.now()}`,
+        primaryUserId: userEmail,
+        name: payload.name.trim(),
+        email: payload.email.trim().toLowerCase(),
+        relationship: payload.relationship || 'Family Member',
+        avatar: payload.avatar || `avatar-${(existingFamily.length % 5) + 2}`,
+        role: 'FAMILY_MEMBER',
+        permissions: {
+          ...DEFAULT_FAMILY_PERMISSIONS,
+          canViewBudgets: payload.canViewBudget ?? true,
+        },
+        sharedEventIds:
+          payload.sharedEventIds && payload.sharedEventIds.length > 0
+            ? payload.sharedEventIds
+            : customerEvents.map((e) => e.id),
+        createdAt: new Date().toISOString(),
+      };
+
+      setCustomerProfiles((prev) => {
+        const next = [...prev, newProfile];
+        saveStored(STORAGE_KEYS.CUSTOMER_PROFILES, next);
+        return next;
+      });
+
+      return newProfile;
+    },
+    [session, activeCustomerProfile, customerProfiles, customerEvents]
+  );
+
+  const updateFamilyProfile = useCallback(
+    (id: string, updates: Partial<CustomerProfile>) => {
+      if (session.role !== 'CUSTOMER' || activeCustomerProfile?.role !== 'PRIMARY') {
+        throw new Error('Only the primary account holder can edit family profiles.');
+      }
+      setCustomerProfiles((prev) => {
+        const next = prev.map((p) => (p.id === id ? { ...p, ...updates } : p));
+        saveStored(STORAGE_KEYS.CUSTOMER_PROFILES, next);
+        return next;
+      });
+    },
+    [session, activeCustomerProfile]
+  );
+
+  const deleteFamilyProfile = useCallback(
+    (id: string) => {
+      if (session.role !== 'CUSTOMER' || activeCustomerProfile?.role !== 'PRIMARY') {
+        throw new Error('Only the primary account holder can remove family profiles.');
+      }
+      const target = customerProfiles.find((p) => p.id === id);
+      if (!target) return;
+      if (target.role === 'PRIMARY') {
+        throw new Error('Cannot remove the primary account holder profile.');
+      }
+
+      setCustomerProfiles((prev) => {
+        const next = prev.filter((p) => p.id !== id);
+        saveStored(STORAGE_KEYS.CUSTOMER_PROFILES, next);
+        return next;
+      });
+
+      if (activeProfileId === id) {
+        const primary = activeCustomerProfiles.find((p) => p.role === 'PRIMARY');
+        if (primary) {
+          setActiveProfileIdState(primary.id);
+          saveStored(STORAGE_KEYS.ACTIVE_PROFILE_ID, primary.id);
+        }
+      }
+    },
+    [session, activeCustomerProfile, customerProfiles, activeProfileId, activeCustomerProfiles]
+  );
+
+  const switchCustomerProfile = useCallback((id: string) => {
+    setActiveProfileIdState(id);
+    saveStored(STORAGE_KEYS.ACTIVE_PROFILE_ID, id);
+  }, []);
+
+  // --- Organizer Client Profiles State & Methods ---
+  const activeClient = useMemo<OrganizerClientProfile | null>(() => {
+    if (session.role !== 'PLANNER') return null;
+    return organizerClients.find((c) => c.id === activeClientId) || organizerClients[0] || null;
+  }, [session.role, organizerClients, activeClientId]);
+
+  const setActiveClientId = useCallback(
+    (clientId: string) => {
+      setActiveClientIdState(clientId);
+      saveStored(STORAGE_KEYS.ACTIVE_CLIENT_ID, clientId);
+
+      // Contextual switch: when client profile changes, automatically switch activeEventId
+      const client = organizerClients.find((c) => c.id === clientId);
+      if (client && client.eventIds.length > 0) {
+        const matchingEvent = events.find((e) => client.eventIds.includes(e.id));
+        if (matchingEvent) {
+          setActiveEventId(matchingEvent.id);
+        }
+      }
+    },
+    [organizerClients, events, setActiveEventId]
+  );
+
+  const addOrganizerClient = useCallback(
+    (clientData: {
+      clientName: string;
+      clientEmail: string;
+      clientPhone?: string;
+      company?: string;
+      notes?: string;
+      initialEvent?: Omit<WeddingEvent, 'id' | 'createdAt'>;
+    }) => {
+      const newClientId = `client-${Date.now()}`;
+      let createdEventId: string | undefined;
+
+      if (clientData.initialEvent) {
+        const newEvent: WeddingEvent = {
+          ...clientData.initialEvent,
+          id: `evt-${Date.now()}`,
+          clientName: clientData.clientName,
+          clientEmail: clientData.clientEmail,
+          clientPhone: clientData.clientPhone,
+          ownerName: session.name,
+          ownerRole: 'PLANNER',
+          createdAt: new Date().toISOString(),
+        };
+        setEvents((prev) => {
+          const next = [newEvent, ...prev];
+          saveStored(STORAGE_KEYS.EVENTS, next);
+          return next;
+        });
+        createdEventId = newEvent.id;
+        setActiveEventId(newEvent.id);
+      }
+
+      const newClient: OrganizerClientProfile = {
+        id: newClientId,
+        organizerUserId: session.email,
+        clientName: clientData.clientName.trim(),
+        clientEmail: clientData.clientEmail.trim().toLowerCase(),
+        clientPhone: clientData.clientPhone || '',
+        company: clientData.company,
+        notes: clientData.notes,
+        status: 'ACTIVE',
+        eventIds: createdEventId ? [createdEventId] : [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      setOrganizerClients((prev) => {
+        const next = [newClient, ...prev];
+        saveStored(STORAGE_KEYS.ORGANIZER_CLIENTS, next);
+        return next;
+      });
+
+      setActiveClientIdState(newClientId);
+      saveStored(STORAGE_KEYS.ACTIVE_CLIENT_ID, newClientId);
+      return newClient;
+    },
+    [session, setActiveEventId]
+  );
+
+  const updateOrganizerClient = useCallback(
+    (id: string, updates: Partial<OrganizerClientProfile>) => {
+      setOrganizerClients((prev) => {
+        const next = prev.map((c) =>
+          c.id === id ? { ...c, ...updates, updatedAt: new Date().toISOString() } : c
+        );
+        saveStored(STORAGE_KEYS.ORGANIZER_CLIENTS, next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const archiveOrganizerClient = useCallback((id: string) => {
+    setOrganizerClients((prev) => {
+      const next = prev.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              status: (c.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED') as 'ACTIVE' | 'ARCHIVED',
+              updatedAt: new Date().toISOString(),
+            }
+          : c
+      );
+      saveStored(STORAGE_KEYS.ORGANIZER_CLIENTS, next);
+      return next;
+    });
+  }, []);
+
+  const createClientEvent = useCallback(
+    (clientId: string, eventData: Omit<WeddingEvent, 'id' | 'createdAt'>) => {
+      const targetClient = organizerClients.find((c) => c.id === clientId);
+      if (!targetClient) throw new Error('Client profile not found');
+
+      const newEvent: WeddingEvent = {
+        ...eventData,
+        id: `evt-${Date.now()}`,
+        clientName: targetClient.clientName,
+        clientEmail: targetClient.clientEmail,
+        clientPhone: targetClient.clientPhone,
+        ownerName: session.name,
+        ownerRole: 'PLANNER',
+        createdAt: new Date().toISOString(),
+      };
+
+      setEvents((prev) => {
+        const next = [newEvent, ...prev];
+        saveStored(STORAGE_KEYS.EVENTS, next);
+        return next;
+      });
+
+      setOrganizerClients((prev) => {
+        const next = prev.map((c) =>
+          c.id === clientId ? { ...c, eventIds: [...c.eventIds, newEvent.id] } : c
+        );
+        saveStored(STORAGE_KEYS.ORGANIZER_CLIENTS, next);
+        return next;
+      });
+
+      setActiveEventId(newEvent.id);
+      return newEvent;
+    },
+    [organizerClients, session, setActiveEventId]
+  );
+
   const addEvent = useCallback(
     (eventData: Omit<WeddingEvent, 'id' | 'createdAt'> & { id?: string; createdAt?: string }) => {
+      if (session.role === 'CUSTOMER' && activeCustomerProfile?.role === 'FAMILY_MEMBER') {
+        throw new Error('Family members have view-only access and cannot create or modify events.');
+      }
+
       const newEvent: WeddingEvent = {
         ...eventData,
         id: eventData.id || `evt-${Date.now()}`,
@@ -188,7 +556,7 @@ export function useDemoSession() {
       setActiveEventId(newEvent.id);
       return newEvent;
     },
-    [setActiveEventId, session]
+    [setActiveEventId, session, activeCustomerProfile]
   );
 
   // Role Login helpers
@@ -227,21 +595,31 @@ export function useDemoSession() {
             email: 'aniket@tribhavan.com',
           };
         } else {
-          // Rohil Kulkarni (Default Preserved Demo Profile)
+          // Rohan Kulkarni (Default Preserved Demo Profile)
           newSession = {
             role: 'CUSTOMER',
-            name: 'Rohil Kulkarni (Groom)',
+            name: 'Rohan Kulkarni',
             email: 'rohil@kulkarni.com',
           };
         }
       }
       setSessionState(newSession);
       saveStored(STORAGE_KEYS.SESSION, newSession);
+
+      // Reset active profile on login to primary
+      if (role === 'CUSTOMER') {
+        const primaryId =
+          newSession.email === 'rohil@kulkarni.com'
+            ? 'prof-rohan-primary'
+            : `prof-${newSession.email.replace(/[^a-zA-Z0-9]/g, '-')}-primary`;
+        setActiveProfileIdState(primaryId);
+        saveStored(STORAGE_KEYS.ACTIVE_PROFILE_ID, primaryId);
+      }
     },
     []
   );
 
-  // Update vendor calendar availability (PRD Section 9 & Test H)
+  // Update vendor calendar availability
   const updateVendorAvailability = useCallback(
     (vendorId: string, date: string, status: AvailabilityStatus) => {
       setCalendarOverrides((prev) => {
@@ -269,6 +647,10 @@ export function useDemoSession() {
       requirements: string;
       guestCount?: number;
     }) => {
+      if (session.role === 'CUSTOMER' && activeCustomerProfile?.role === 'FAMILY_MEMBER') {
+        throw new Error('Family members have view-only access and cannot send vendor inquiries.');
+      }
+
       const targetEvent = events.find((e) => e.id === payload.eventId) || activeEvent;
       const newInq: Inquiry = {
         id: `inq-${Date.now()}`,
@@ -295,7 +677,7 @@ export function useDemoSession() {
       });
       return newInq;
     },
-    [events, activeEvent, session]
+    [events, activeEvent, session, activeCustomerProfile]
   );
 
   const createQuotation = useCallback(
@@ -329,7 +711,6 @@ export function useDemoSession() {
         return next;
       });
 
-      // Update inquiry status
       setInquiries((prev) => {
         const next = prev.map((inq) =>
           inq.id === payload.inquiryId ? { ...inq, status: 'QUOTED' as const } : inq
@@ -345,20 +726,23 @@ export function useDemoSession() {
 
   const acceptQuotationAndBook = useCallback(
     (quotationId: string) => {
+      // Permission guard: family members cannot make bookings!
+      if (session.role === 'CUSTOMER' && activeCustomerProfile?.role === 'FAMILY_MEMBER') {
+        throw new Error('Family members have view-only access and cannot confirm bookings.');
+      }
+
       const quote = quotations.find((q) => q.id === quotationId);
       if (!quote) throw new Error('Quotation not found');
 
       const matchingInq = inquiries.find((i) => i.id === quote.inquiryId);
       const targetEvent = matchingInq ? events.find((e) => e.id === matchingInq.eventId) : activeEvent;
 
-      // Update quote status
       setQuotations((prev) => {
         const next = prev.map((q) => (q.id === quotationId ? { ...q, status: 'BOOKED' as const } : q));
         saveStored(STORAGE_KEYS.QUOTATIONS, next);
         return next;
       });
 
-      // Create confirmed booking
       const newBooking: Booking = {
         id: `bk-${Date.now()}`,
         quotationId,
@@ -380,10 +764,8 @@ export function useDemoSession() {
         return next;
       });
 
-      // Reserve vendor calendar date
       updateVendorAvailability(quote.vendorId, newBooking.eventDate, 'Fully Booked');
 
-      // Add linked timeline task
       const newTask: TimelineTask = {
         id: `task-${Date.now()}`,
         eventId: newBooking.eventId,
@@ -402,7 +784,7 @@ export function useDemoSession() {
 
       return newBooking;
     },
-    [quotations, inquiries, events, activeEvent, updateVendorAvailability]
+    [quotations, inquiries, events, activeEvent, updateVendorAvailability, session.role, activeCustomerProfile]
   );
 
   // Simulated Payment
@@ -414,6 +796,11 @@ export function useDemoSession() {
       payeeName: string;
       purpose?: string;
     }) => {
+      // Permission guard: family members cannot manage payments!
+      if (session.role === 'CUSTOMER' && activeCustomerProfile?.role === 'FAMILY_MEMBER') {
+        throw new Error('Family members have view-only access and cannot make payments.');
+      }
+
       const targetEvent = events.find((e) => e.id === payload.eventId) || activeEvent;
       const newPmt: SimulatedPayment = {
         id: `pmt-${Date.now()}`,
@@ -436,7 +823,6 @@ export function useDemoSession() {
         return next;
       });
 
-      // Update paid amount on booking if provided
       if (payload.bookingId) {
         setBookings((prev) => {
           const next = prev.map((b) =>
@@ -449,12 +835,16 @@ export function useDemoSession() {
 
       return newPmt;
     },
-    [events, activeEvent, session]
+    [events, activeEvent, session, activeCustomerProfile]
   );
 
   // Timeline Tasks
   const addTimelineTask = useCallback(
     (taskName: string, category?: string, deadline?: string) => {
+      if (session.role === 'CUSTOMER' && activeCustomerProfile?.role === 'FAMILY_MEMBER') {
+        throw new Error('Family members have view-only access and cannot modify timeline tasks.');
+      }
+
       const newTask: TimelineTask = {
         id: `task-${Date.now()}`,
         eventId: activeEvent.id,
@@ -470,22 +860,29 @@ export function useDemoSession() {
       });
       return newTask;
     },
-    [activeEvent]
+    [activeEvent, session.role, activeCustomerProfile]
   );
 
-  const toggleTimelineTask = useCallback((taskId: string) => {
-    setTimelineTasks((prev) => {
-      const next = prev.map((t) =>
-        t.id === taskId
-          ? { ...t, status: t.status === 'COMPLETED' ? ('PENDING' as const) : ('COMPLETED' as const) }
-          : t
-      );
-      saveStored(STORAGE_KEYS.TIMELINE, next);
-      return next;
-    });
-  }, []);
+  const toggleTimelineTask = useCallback(
+    (taskId: string) => {
+      if (session.role === 'CUSTOMER' && activeCustomerProfile?.role === 'FAMILY_MEMBER') {
+        throw new Error('Family members have view-only access and cannot update tasks.');
+      }
 
-  // Shortlist Management (Version 3.0 Sections 7, 8, 9, 10)
+      setTimelineTasks((prev) => {
+        const next = prev.map((t) =>
+          t.id === taskId
+            ? { ...t, status: t.status === 'COMPLETED' ? ('PENDING' as const) : ('COMPLETED' as const) }
+            : t
+        );
+        saveStored(STORAGE_KEYS.TIMELINE, next);
+        return next;
+      });
+    },
+    [session.role, activeCustomerProfile]
+  );
+
+  // Shortlist Management
   const addToShortlist = useCallback(
     (vendor: Vendor, eventId?: string, customerBudget?: number) => {
       const targetEvent = events.find((e) => e.id === (eventId || activeEventId)) || activeEvent;
@@ -580,5 +977,32 @@ export function useDemoSession() {
     recordSimulatedPayment,
     addTimelineTask,
     toggleTimelineTask,
+
+    // Part A: Customer Profiles & Permissions
+    customerProfiles,
+    activeCustomerProfiles,
+    activeProfileId,
+    activeCustomerProfile,
+    isFamilyMember,
+    canMakeBookings,
+    canManagePayments,
+    canModifyEvents,
+    canModifyBudgets,
+    canUpdateTasks,
+    canManageProfiles,
+    addFamilyProfile,
+    updateFamilyProfile,
+    deleteFamilyProfile,
+    switchCustomerProfile,
+
+    // Part B: Organizer Client Profiles
+    organizerClients,
+    activeClientId,
+    activeClient,
+    addOrganizerClient,
+    updateOrganizerClient,
+    archiveOrganizerClient,
+    setActiveClientId,
+    createClientEvent,
   };
 }

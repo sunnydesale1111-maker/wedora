@@ -9,6 +9,7 @@ import paymentRoutes from './payment.routes.js';
 import timelineRoutes from './timeline.routes.js';
 import aiRoutes from './ai.routes.js';
 import categoryRoutes from './category.routes.js';
+import profileRoutes from './profile.routes.js';
 import { TimelineController } from '../controllers/timeline.controller.js';
 import { authenticateToken } from '../middleware/auth.js';
 
@@ -24,6 +25,7 @@ apiRouter.use('/payments', paymentRoutes);
 apiRouter.use('/timeline', timelineRoutes);
 apiRouter.use('/ai', aiRoutes);
 apiRouter.use('/categories', categoryRoutes);
+apiRouter.use('/profiles', profileRoutes);
 
 // Direct mapping for GET /api/events/:id/timeline as specified in Section 15
 apiRouter.get('/events/:id/timeline', authenticateToken, TimelineController.getTasksByEvent);

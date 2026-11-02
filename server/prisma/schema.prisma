@@ -83,6 +83,8 @@ model User {
   receivedPayments Payment[]      @relation("PayeePayments")
   assignedTasks TimelineTask[]    @relation("UserAssignedTasks")
   aiConversations AIConversation[]
+  familyProfiles CustomerFamilyProfile[] @relation("UserFamilyProfiles")
+  clientProfiles OrganizerClientProfile[] @relation("OrganizerClientProfiles")
 
   @@map("users")
 }
@@ -187,6 +189,9 @@ model Event {
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
   owner           User           @relation("UserEvents", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  organizerClientId String?      @map("organizer_client_id")
+  organizerClient OrganizerClientProfile? @relation("ClientProfileEvents", fields: [organizerClientId], references: [id], onDelete: SetNull)
+  profileAccess   CustomerProfileEventAccess[] @relation("EventProfileAccess")
   inquiries       Inquiry[]
   quotations      Quotation[]
   bookings        Booking[]
@@ -356,4 +361,59 @@ model AIMessage {
 
   @@index([conversationId])
   @@map("ai_messages")
+}
+
+model CustomerFamilyProfile {
+  id            String   @id @default(uuid())
+  primaryUserId String   @map("primary_user_id")
+  name          String
+  email         String
+  relationship  String   @default("Family Member")
+  avatar        String   @default("avatar-1")
+  role          String   @default("FAMILY_MEMBER") // PRIMARY or FAMILY_MEMBER
+  permissions   Json     @default("{\"canViewEvents\": true, \"canViewVendors\": true, \"canViewTasks\": true, \"canViewBudgets\": true, \"canViewBookings\": true, \"canMakeBookings\": false, \"canManagePayments\": false, \"canManageEvents\": false, \"canModifyBudgets\": false, \"canUpdateTasks\": false, \"canManageProfiles\": false, \"canInviteMembers\": false}")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  primaryUser   User     @relation("UserFamilyProfiles", fields: [primaryUserId], references: [id], onDelete: Cascade)
+  sharedEvents  CustomerProfileEventAccess[]
+
+  @@index([primaryUserId])
+  @@index([email])
+  @@map("customer_family_profiles")
+}
+
+model CustomerProfileEventAccess {
+  id            String   @id @default(uuid())
+  profileId     String   @map("profile_id")
+  eventId       String   @map("event_id")
+  canViewBudget Boolean  @default(true) @map("can_view_budget")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  profile       CustomerFamilyProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  event         Event                 @relation("EventProfileAccess", fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, eventId])
+  @@index([profileId])
+  @@index([eventId])
+  @@map("customer_profile_event_access")
+}
+
+model OrganizerClientProfile {
+  id              String   @id @default(uuid())
+  organizerUserId String   @map("organizer_user_id")
+  clientName      String   @map("client_name")
+  clientEmail     String   @map("client_email")
+  clientPhone     String   @map("client_phone")
+  company         String?
+  status          String   @default("ACTIVE") // ACTIVE or ARCHIVED
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  organizer       User     @relation("OrganizerClientProfiles", fields: [organizerUserId], references: [id], onDelete: Cascade)
+  events          Event[]  @relation("ClientProfileEvents")
+
+  @@index([organizerUserId])
+  @@map("organizer_client_profiles")
 }
