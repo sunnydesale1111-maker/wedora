@@ -9,18 +9,25 @@
  * ENABLE_EVENT_HERO_CAROUSEL
  *
  * Controls whether the multi-event carousel is displayed on the live homepage hero.
- * Set to `true` to display the approved six-slide event carousel.
+ * Set to `true` to display the approved six-banner event carousel.
  * Set to `false` to immediately restore the original wedding hero exactly as it was.
  */
 export const ENABLE_EVENT_HERO_CAROUSEL = true;
 
 /**
+ * AUTO_SLIDE_INTERVAL
+ *
+ * The final requested autoplay transition interval for the event hero carousel (350 ms).
+ * Each banner automatically advances after 350 milliseconds.
+ */
+export const AUTO_SLIDE_INTERVAL = 350;
+
+/**
  * HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS
  *
- * The requested autoplay transition interval for the event hero carousel.
- * Configured to 175 milliseconds as requested.
+ * Alias for AUTO_SLIDE_INTERVAL (350 ms).
  */
-export const HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS = 175;
+export const HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS = AUTO_SLIDE_INTERVAL;
 
 /**
  * HERO_CAROUSEL_READABLE_INTERVAL_MS
