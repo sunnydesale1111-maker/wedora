@@ -156,8 +156,8 @@ describe("Wedora – Final Homepage Hero Carousel Implementation", () => {
   });
 
   describe("4. Automatic Carousel Timing & Controls", () => {
-    it("has the requested 120 ms interval configured with safe 3000 ms option", () => {
-      expect(HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS).toBe(120);
+    it("has the requested 175 ms interval configured with safe 3000 ms option", () => {
+      expect(HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS).toBe(175);
       expect(HERO_CAROUSEL_READABLE_INTERVAL_MS).toBe(3000);
     });
 

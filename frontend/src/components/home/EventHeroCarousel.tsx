@@ -213,8 +213,8 @@ export function EventHeroCarousel({
   const BadgeIcon = currentSlide.badgeIcon;
 
   // Transition duration adapts to active interval:
-  // Fast 120ms interval uses snappy 75ms transition to prevent overlap; readable 3s interval uses smooth 500ms transition.
-  const transitionDurationMs = activeInterval <= 200 ? 75 : 500;
+  // Fast 175ms interval uses snappy 95ms transition to prevent overlap; readable 3s interval uses smooth 500ms transition.
+  const transitionDurationMs = activeInterval <= 250 ? 95 : 500;
 
   return (
     <section
@@ -345,20 +345,20 @@ export function EventHeroCarousel({
             <span className="text-plum font-bold">{activeIndex + 1}</span> / {totalSlides} · {currentSlide.eventType}
           </span>
 
-          {/* Configurable Timing Toggle (120ms Trial vs 3s Readable) */}
+          {/* Configurable Timing Toggle (175ms Trial vs 3s Readable) */}
           <div className="inline-flex items-center rounded-full border border-border/80 bg-background/90 p-0.5 text-[11px] font-medium shadow-2xs">
             <button
               type="button"
               onClick={() => setActiveInterval(HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS)}
               className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full transition ${
-                activeInterval <= 200
+                activeInterval <= 250
                   ? "bg-plum text-gold font-bold shadow-xs"
                   : "text-muted-foreground hover:text-plum"
               }`}
-              title="120ms rapid transition trial"
+              title="175ms rapid transition trial"
             >
               <Zap className="size-3" />
-              <span>120ms</span>
+              <span>175ms</span>
             </button>
             <button
               type="button"

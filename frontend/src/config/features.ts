@@ -18,9 +18,9 @@ export const ENABLE_EVENT_HERO_CAROUSEL = true;
  * HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS
  *
  * The requested autoplay transition interval for the event hero carousel.
- * Configured to 120 milliseconds as requested.
+ * Configured to 175 milliseconds as requested.
  */
-export const HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS = 120;
+export const HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS = 175;
 
 /**
  * HERO_CAROUSEL_READABLE_INTERVAL_MS
