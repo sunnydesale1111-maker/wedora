@@ -14,6 +14,7 @@ export function DashboardShell({
   onChange,
   role,
   user,
+  userControl,
   children,
 }: {
   nav: NavItem[];
@@ -21,6 +22,7 @@ export function DashboardShell({
   onChange: (k: string) => void;
   role: string;
   user: string;
+  userControl?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -115,14 +117,18 @@ export function DashboardShell({
               <span className="size-2 rounded-full bg-gold absolute top-1 right-1"></span>
             </button>
 
-            <div className="flex items-center gap-2 pl-2 border-l">
-              <div className="flex size-8 items-center justify-center rounded-full bg-gold-soft font-display text-plum font-semibold text-sm">
-                {user ? user[0] : "U"}
+            {userControl ? (
+              userControl
+            ) : (
+              <div className="flex items-center gap-2 pl-2 border-l">
+                <div className="flex size-8 items-center justify-center rounded-full bg-gold-soft font-display text-plum font-semibold text-sm">
+                  {user ? user[0] : "U"}
+                </div>
+                <span className="hidden text-xs font-medium text-navy md:block">
+                  {user}
+                </span>
               </div>
-              <span className="hidden text-xs font-medium text-navy md:block">
-                {user}
-              </span>
-            </div>
+            )}
           </div>
         </header>
 

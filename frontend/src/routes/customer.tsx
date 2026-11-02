@@ -34,6 +34,7 @@ import { EventOrganizerDirectory } from "@/components/customer/EventOrganizerDir
 import { CustomerShortlistAndCommunications } from "@/components/customer/CustomerShortlistAndCommunications";
 import { CustomerBookingsAndChecklist } from "@/components/customer/CustomerBookingsAndChecklist";
 import { CustomerProfileSelector } from "@/components/customer/CustomerProfileSelector";
+import { CustomerProfileDropdown } from "@/components/customer/CustomerProfileDropdown";
 import { ManageFamilyProfilesModal } from "@/components/customer/ManageFamilyProfilesModal";
 
 export const Route = createFileRoute("/customer")({
@@ -57,8 +58,8 @@ const nav: NavItem[] = [
 
 function CustomerPortal() {
   const [tab, setTab] = useState("hub");
-  const [isProfileSelectorOpen, setIsProfileSelectorOpen] = useState(false);
   const [isManageProfilesModalOpen, setIsManageProfilesModalOpen] = useState(false);
+  const [manageModalAddMode, setManageModalAddMode] = useState(false);
 
   const {
     session,
@@ -108,123 +109,51 @@ function CustomerPortal() {
       onChange={setTab}
       role="Individual Customer Portal"
       user={activeCustomerProfile?.name || session.name || "Customer User"}
+      userControl={
+        <CustomerProfileDropdown
+          profiles={activeCustomerProfiles}
+          activeProfile={activeCustomerProfile}
+          onSelectProfile={(id) => switchCustomerProfile(id)}
+          onAddFamilyMember={() => {
+            setManageModalAddMode(true);
+            setIsManageProfilesModalOpen(true);
+          }}
+          onManageProfiles={() => {
+            setManageModalAddMode(false);
+            setIsManageProfilesModalOpen(true);
+          }}
+          canManageProfiles={canManageProfiles}
+        />
+      }
     >
       <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
-        {/* Profile Selector Screen (Netflix-Style) when requested */}
-        {isProfileSelectorOpen ? (
-          <CustomerProfileSelector
-            profiles={activeCustomerProfiles}
-            activeProfileId={activeProfileId}
-            primaryProfile={primaryProfile}
-            onSelectProfile={(id) => {
-              switchCustomerProfile(id);
-              setIsProfileSelectorOpen(false);
+        {/* Family Member View-Only Notice Banner */}
+        {isFamilyMember && (
+          <div className="rounded-2xl border border-plum/30 bg-plum/5 p-4 text-xs flex items-center justify-between gap-3 text-plum">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="size-4 shrink-0 text-plum" />
+              <span>
+                <strong>Family View-Only Mode:</strong> Viewing shared celebrations for{" "}
+                <strong>{activeEvent?.eventName || "Wedding Celebration"}</strong> as{" "}
+                <strong>{activeCustomerProfile?.name}</strong>. Event modifications, bookings, and payments are reserved for the Primary Account Holder.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* If Customer has NO registered event -> Launch Event Onboarding Journey */}
+        {!activeEvent ? (
+          <CustomerEventOnboarding
+            customerName={session.name}
+            customerEmail={session.email}
+            onEventRegistered={(newEvent) => {
+              addEvent(newEvent);
+              setTab("hub");
             }}
-            onOpenManageModal={() => setIsManageProfilesModalOpen(true)}
           />
         ) : (
           <>
-            {/* Customer Multi-Profile Header Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-card p-3.5 sm:px-5 shadow-2xs">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`flex size-10 items-center justify-center rounded-xl font-display font-bold text-sm shadow-2xs ${
-                    isFamilyMember
-                      ? "bg-plum text-gold"
-                      : "bg-gold-soft text-navy border border-gold/40"
-                  }`}
-                >
-                  {activeCustomerProfile?.name ? activeCustomerProfile.name[0]?.toUpperCase() : "U"}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-navy text-sm">
-                      {activeCustomerProfile?.name || session.name}
-                    </span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        isFamilyMember
-                          ? "bg-plum/10 text-plum border border-plum/30"
-                          : "bg-gold-soft text-navy border border-gold/40"
-                      }`}
-                    >
-                      {isFamilyMember
-                        ? `Family Member (${activeCustomerProfile?.relationship || "View Only"})`
-                        : "Primary Account Holder"}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    {activeCustomerProfile?.email || session.email} ·{" "}
-                    {isFamilyMember ? (
-                      <span className="text-plum font-medium">View-Only Mode</span>
-                    ) : (
-                      <span className="text-emerald-700 font-medium">Full Access</span>
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {activeCustomerProfiles.length > 1 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsProfileSelectorOpen(true)}
-                    className="text-xs font-semibold border-gold/50 text-plum hover:bg-gold-soft/50 gap-1.5 cursor-pointer"
-                  >
-                    <Users className="size-3.5 text-gold" />
-                    <span>Switch Profile ({activeCustomerProfiles.length})</span>
-                  </Button>
-                )}
-
-                {canManageProfiles && (
-                  <Button
-                    variant="soft"
-                    size="sm"
-                    onClick={() => setIsManageProfilesModalOpen(true)}
-                    className="text-xs font-semibold gap-1.5 cursor-pointer"
-                  >
-                    <Users className="size-3.5" />
-                    <span>Manage Family Profiles</span>
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Family Member View-Only Notice Banner */}
-            {isFamilyMember && (
-              <div className="rounded-2xl border border-plum/30 bg-plum/5 p-4 text-xs flex items-center justify-between gap-3 text-plum">
-                <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="size-4 shrink-0 text-plum" />
-                  <span>
-                    <strong>Family View-Only Mode:</strong> You are viewing shared celebrations for{" "}
-                    <strong>{activeEvent?.eventName || "Wedding Celebration"}</strong>. Inquiries, vendor contracts, and payments are reserved for the Primary Account Holder.
-                  </span>
-                </div>
-                {activeCustomerProfiles.length > 1 && (
-                  <button
-                    onClick={() => setIsProfileSelectorOpen(true)}
-                    className="text-plum hover:underline font-semibold shrink-0 cursor-pointer text-xs"
-                  >
-                    Switch Profile
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* If Customer has NO registered event -> Launch Event Onboarding Journey */}
-            {!activeEvent ? (
-              <CustomerEventOnboarding
-                customerName={session.name}
-                customerEmail={session.email}
-                onEventRegistered={(newEvent) => {
-                  addEvent(newEvent);
-                  setTab("hub");
-                }}
-              />
-            ) : (
-              <>
-                {/* ================= 1. PLANNING HUB ================= */}
+            {/* ================= 1. PLANNING HUB ================= */}
                 {tab === "hub" && (
                   <div className="space-y-8 animate-rise">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -433,16 +362,18 @@ function CustomerPortal() {
                 )}
               </>
             )}
-          </>
-        )}
 
         {/* Modal: Manage Family Profiles */}
         <ManageFamilyProfilesModal
           isOpen={isManageProfilesModalOpen}
-          onClose={() => setIsManageProfilesModalOpen(false)}
+          onClose={() => {
+            setIsManageProfilesModalOpen(false);
+            setManageModalAddMode(false);
+          }}
           profiles={activeCustomerProfiles}
           primaryProfile={primaryProfile}
           events={customerEvents}
+          initialAddMode={manageModalAddMode}
           onAddProfile={addFamilyProfile}
           onUpdateProfile={updateFamilyProfile}
           onDeleteProfile={deleteFamilyProfile}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users,
   Plus,
@@ -21,6 +21,7 @@ interface ManageFamilyProfilesModalProps {
   profiles: CustomerProfile[];
   primaryProfile: CustomerProfile;
   events: WeddingEvent[];
+  initialAddMode?: boolean;
   onAddProfile: (data: {
     name: string;
     email: string;
@@ -58,12 +59,20 @@ export function ManageFamilyProfilesModal({
   profiles,
   primaryProfile,
   events,
+  initialAddMode = false,
   onAddProfile,
   onUpdateProfile,
   onDeleteProfile,
 }: ManageFamilyProfilesModalProps) {
-  const [isAdding, setIsAdding] = useState(false);
+  const [isAdding, setIsAdding] = useState(Boolean(initialAddMode));
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setIsAdding(Boolean(initialAddMode));
+      setEditingId(null);
+    }
+  }, [isOpen, initialAddMode]);
 
   // Form states
   const [name, setName] = useState('');

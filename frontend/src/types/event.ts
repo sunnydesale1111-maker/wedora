@@ -15,6 +15,7 @@ export interface WeddingEvent {
   clientEmail?: string;
   clientPhone?: string;
   guestCount: number;
+  originalBudget?: number;
   estimatedBudget: number;
   description?: string;
   requirements?: string[];

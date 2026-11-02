@@ -18,9 +18,7 @@ import {
   Bookmark,
   Building2,
   Phone,
-  FolderKanban,
   ChevronDown,
-  UserCheck,
 } from "lucide-react";
 import {
   DashboardShell,
@@ -39,8 +37,10 @@ import { useDemoSession } from "@/hooks/useDemoSession";
 import { SimulatedPaymentModal } from "@/components/payments/SimulatedPaymentModal";
 import { EventTimelineView } from "@/components/timeline/EventTimelineView";
 import { Booking } from "@/types/booking";
+import { WeddingEvent } from "@/types/event";
 import { CreateEventAIModal } from "@/components/planner/CreateEventAIModal";
 import { ManageClientProfilesModal } from "@/components/planner/ManageClientProfilesModal";
+import { ClientEventDetailModal } from "@/components/planner/ClientEventDetailModal";
 import { ALL_LOCALITIES } from "@/utils/localityRegistry";
 
 export const Route = createFileRoute("/planner")({
@@ -78,6 +78,7 @@ function PlannerPortal() {
     recordSimulatedPayment,
     addTimelineTask,
     toggleTimelineTask,
+    customerProfiles,
     // Organizer Client Profiles
     organizerClients,
     activeClientId,
@@ -97,7 +98,9 @@ function PlannerPortal() {
 
   // Manage Organizer Client Profiles Modal
   const [showManageClientsModal, setShowManageClientsModal] = useState(false);
-  const [eventFilterMode, setEventFilterMode] = useState<"ACTIVE_CLIENT" | "ALL">("ACTIVE_CLIENT");
+
+  // Client Event Detail Popup Modal State
+  const [selectedDetailEvent, setSelectedDetailEvent] = useState<WeddingEvent | null>(null);
 
   // New Event creation modal/state
   const [showNewEventModal, setShowNewEventModal] = useState(false);
@@ -118,29 +121,6 @@ function PlannerPortal() {
   const totalPaid = bookings.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
   const outstandingTotal = Math.max(0, totalAgreed - totalPaid);
 
-  // Active Client Context Filtering
-  const activeClientEvents = useMemo(() => {
-    if (!activeClient) return events;
-    return events.filter(
-      (e) => activeClient.eventIds.includes(e.id) || e.clientName === activeClient.clientName
-    );
-  }, [events, activeClient]);
-
-  const displayedEvents = eventFilterMode === "ACTIVE_CLIENT" ? activeClientEvents : events;
-
-  // Active Client Bookings & Metrics
-  const activeClientBookings = useMemo(() => {
-    if (!activeClient) return bookings;
-    const clientEventIds = new Set(activeClientEvents.map((e) => e.id));
-    return bookings.filter(
-      (b) => clientEventIds.has(b.eventId) || b.clientName === activeClient.clientName
-    );
-  }, [bookings, activeClient, activeClientEvents]);
-
-  const activeClientTotalAgreed = activeClientBookings.reduce((sum, b) => sum + b.agreedAmount, 0);
-  const activeClientTotalPaid = activeClientBookings.reduce((sum, b) => sum + (b.paidAmount || 0), 0);
-  const activeClientOutstanding = Math.max(0, activeClientTotalAgreed - activeClientTotalPaid);
-
   return (
     <DashboardShell
       nav={nav}
@@ -149,100 +129,32 @@ function PlannerPortal() {
       role="Professional Event Planner"
       user="Aditi Sharma (Lead Planner)"
     >
-      {/* ================= ORGANIZER CLIENT CONTEXT SWITCHER BAR ================= */}
-      <div className="mb-8 rounded-3xl border border-gold/40 bg-card p-4 sm:p-5 shadow-soft">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-start sm:items-center gap-3">
-            <div className="size-12 rounded-2xl bg-gold-soft border border-gold/30 flex items-center justify-center text-plum shrink-0">
-              <FolderKanban className="size-6 text-gold" />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gold">
-                  Active Client Profile
-                </span>
-                {activeClient?.status === "ARCHIVED" ? (
-                  <span className="text-[10px] font-bold bg-muted text-muted-foreground px-2 py-0.5 rounded-full">
-                    Archived
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                    Active
-                  </span>
-                )}
-                <span className="text-xs text-muted-foreground hidden sm:inline">
-                  • {organizerClients.length} Managed Clients
-                </span>
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="relative">
-                  <select
-                    value={activeClientId || ""}
-                    onChange={(e) => setActiveClientId(e.target.value)}
-                    className="text-lg sm:text-xl font-display font-bold text-plum bg-transparent border-b border-dashed border-plum/40 hover:border-plum focus:outline-none cursor-pointer pr-6 py-0.5 appearance-none"
-                  >
-                    {organizerClients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.clientName} ({c.eventIds.length} {c.eventIds.length === 1 ? "Event" : "Events"})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="size-4 text-plum/60 pointer-events-none absolute right-0 top-1/2 -translate-y-1/2" />
-                </div>
-                {activeClient?.company && (
-                  <span className="text-xs font-medium text-navy/70 hidden md:inline bg-muted/40 px-2 py-0.5 rounded-md">
-                    {activeClient.company}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-                {activeClient?.clientEmail && <span>✉ {activeClient.clientEmail}</span>}
-                {activeClient?.clientPhone && <span>📞 {activeClient.clientPhone}</span>}
-                {activeClient?.notes && <span className="italic text-plum/70 font-medium">“{activeClient.notes}”</span>}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowManageClientsModal(true)}
-              className="border-plum/30 text-plum hover:bg-plum/5 text-xs font-semibold gap-1.5 cursor-pointer"
-            >
-              <Users className="size-3.5 text-plum" /> Manage Client Profiles
-            </Button>
-            <Button
-              variant="hero"
-              size="sm"
-              onClick={() => setShowManageClientsModal(true)}
-              className="text-xs font-semibold gap-1.5 cursor-pointer"
-            >
-              <Plus className="size-3.5" /> New Client Profile
-            </Button>
-          </div>
-        </div>
-      </div>
-
       {/* ================= 1. MANAGED CLIENT EVENTS ================= */}
       {tab === "events" && (
         <div className="space-y-8 animate-rise">
           <PageTitle
             title="Managed Client Events"
-            subtitle="Coordinate multiple weddings and private celebrations. Select an event to contextualize AI Discovery."
+            subtitle="Coordinate multiple weddings and private celebrations. Click any celebration to view event overview, planning checklist, budget fluctuation, and contracts."
             action={
               <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
+                  onClick={() => setShowManageClientsModal(true)}
+                  className="border-border text-navy hover:bg-muted font-medium gap-1.5 shadow-2xs cursor-pointer text-xs"
+                >
+                  <Users className="size-3.5 text-navy/70" /> Manage Clients ({organizerClients.length})
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setShowAIEventModal(true)}
-                  className="border-gold text-plum hover:bg-gold-soft font-semibold gap-1.5 shadow-2xs cursor-pointer"
+                  className="border-gold text-plum hover:bg-gold-soft font-semibold gap-1.5 shadow-2xs cursor-pointer text-xs"
                 >
                   <Sparkles className="size-4 text-gold" /> Create Event with AI
                 </Button>
                 <Button
                   variant="hero"
                   onClick={() => setShowNewEventModal(true)}
-                  className="gap-1.5 shadow-2xs cursor-pointer"
+                  className="gap-1.5 shadow-2xs cursor-pointer text-xs"
                 >
                   <Plus className="size-4" /> Create New Client Event
                 </Button>
@@ -250,104 +162,52 @@ function PlannerPortal() {
             }
           />
 
-          {/* Client Filter Pill & Mode Switch */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/30 p-3 rounded-2xl border">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-navy">Filter Events:</span>
-              <div className="inline-flex rounded-xl bg-background p-1 border">
-                <button
-                  type="button"
-                  onClick={() => setEventFilterMode("ACTIVE_CLIENT")}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
-                    eventFilterMode === "ACTIVE_CLIENT"
-                      ? "bg-plum text-white shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Active Client: {activeClient?.clientName.split(" ")[0] || "Client"} ({activeClientEvents.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEventFilterMode("ALL")}
-                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition cursor-pointer ${
-                    eventFilterMode === "ALL"
-                      ? "bg-plum text-white shadow-xs"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  All Managed Events ({events.length})
-                </button>
-              </div>
-            </div>
-            {eventFilterMode === "ACTIVE_CLIENT" && activeClient && (
-              <span className="text-xs text-muted-foreground">
-                Showing celebrations coordinated for <strong className="text-plum">{activeClient.clientName}</strong>
-              </span>
-            )}
-          </div>
-
           {/* Quick Metrics */}
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
-              label={eventFilterMode === "ACTIVE_CLIENT" ? "Client Events" : "Active Events"}
-              value={`${displayedEvents.length}`}
-              hint={eventFilterMode === "ACTIVE_CLIENT" ? `For ${activeClient?.clientName || "Client"}` : "Current wedding seasons"}
+              label="Active Events"
+              value={`${events.length}`}
+              hint="Current wedding seasons"
               icon={Calendar}
             />
             <StatCard
-              label={eventFilterMode === "ACTIVE_CLIENT" ? "Client Bookings" : "Confirmed Bookings"}
-              value={`${(eventFilterMode === "ACTIVE_CLIENT" ? activeClientBookings : bookings).length}`}
+              label="Confirmed Bookings"
+              value={`${bookings.length}`}
               hint="Secured vendor contracts"
               icon={Briefcase}
             />
             <StatCard
-              label={eventFilterMode === "ACTIVE_CLIENT" ? "Client Budget" : "Managed Budget"}
-              value={`₹${(eventFilterMode === "ACTIVE_CLIENT" ? activeClientTotalAgreed : totalAgreed).toLocaleString("en-IN")}`}
-              hint={eventFilterMode === "ACTIVE_CLIENT" ? "Total for this client" : "Aggregated contract value"}
+              label="Managed Budget"
+              value={`₹${totalAgreed.toLocaleString("en-IN")}`}
+              hint="Aggregated contract value"
               icon={DollarSign}
             />
             <StatCard
               label="Outstanding Balances"
-              value={`₹${(eventFilterMode === "ACTIVE_CLIENT" ? activeClientOutstanding : outstandingTotal).toLocaleString("en-IN")}`}
+              value={`₹${outstandingTotal.toLocaleString("en-IN")}`}
               hint="Pending milestones"
               icon={CreditCard}
             />
           </div>
 
           {/* Event Cards Grid */}
-          {displayedEvents.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-gold/50 bg-card p-10 text-center space-y-3">
-              <Calendar className="size-10 text-gold mx-auto" />
-              <h4 className="text-lg font-display font-semibold text-plum">
-                No Events for {activeClient?.clientName}
-              </h4>
-              <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                This client profile does not have any active celebrations assigned yet. You can add a celebration directly to this client.
-              </p>
-              <Button
-                variant="hero"
-                size="sm"
-                onClick={() => setShowManageClientsModal(true)}
-                className="gap-1.5 cursor-pointer"
-              >
-                <Plus className="size-4" /> Add Event to {activeClient?.clientName}
-              </Button>
-            </div>
-          ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {displayedEvents.map((e) => {
-                const isSelected = activeEventId === e.id;
-                const eventBookings = bookings.filter((b) => b.eventId === e.id);
-                return (
-                  <div
-                    key={e.id}
-                    onClick={() => setActiveEventId(e.id)}
-                    className={`flex flex-col rounded-3xl border p-6 transition shadow-soft cursor-pointer ${
-                      isSelected
-                        ? "border-gold bg-gold-soft/30 ring-2 ring-gold/50"
-                        : "bg-card hover:-translate-y-1 hover:border-gold/60"
-                    }`}
-                  >
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {events.map((e) => {
+              const isSelected = activeEventId === e.id;
+              const eventBookings = bookings.filter((b) => b.eventId === e.id);
+              return (
+                <div
+                  key={e.id}
+                  onClick={() => {
+                    setActiveEventId(e.id);
+                    setSelectedDetailEvent(e);
+                  }}
+                  className={`flex flex-col rounded-3xl border p-6 transition shadow-soft cursor-pointer ${
+                    isSelected
+                      ? "border-gold bg-gold-soft/30 ring-2 ring-gold/50"
+                      : "bg-card hover:-translate-y-1 hover:border-gold/60"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-gold">
                       {e.eventType}
@@ -400,18 +260,17 @@ function PlannerPortal() {
                       onClick={(ev) => {
                         ev.stopPropagation();
                         setActiveEventId(e.id);
-                        setTab("discovery");
+                        setSelectedDetailEvent(e);
                       }}
-                      className="font-semibold text-plum hover:text-gold flex items-center gap-1 transition"
+                      className="font-semibold text-plum hover:text-gold flex items-center gap-1 transition cursor-pointer"
                     >
-                      Vendor Directory <ArrowRight className="size-3.5" />
+                      View Details & Milestones <ArrowRight className="size-3.5" />
                     </button>
                   </div>
                 </div>
               );
             })}
           </div>
-          )}
         </div>
       )}
 
@@ -831,6 +690,27 @@ function PlannerPortal() {
         onUpdateClient={updateOrganizerClient}
         onArchiveClient={archiveOrganizerClient}
         onCreateClientEvent={createClientEvent}
+      />
+
+      {/* Detailed Client Event Modal Popup */}
+      <ClientEventDetailModal
+        isOpen={Boolean(selectedDetailEvent)}
+        onClose={() => setSelectedDetailEvent(null)}
+        event={selectedDetailEvent}
+        tasks={timelineTasks}
+        bookings={bookings}
+        quotations={quotations}
+        sharedProfiles={customerProfiles}
+        onToggleTask={(taskId) => toggleTimelineTask(taskId)}
+        onAddTask={(taskName, category, deadline) => addTimelineTask(taskName, category, deadline)}
+        onPayBooking={(booking) => {
+          setSelectedDetailEvent(null);
+          setPayBooking(booking);
+        }}
+        onNavigateToDiscovery={(eventId) => {
+          setActiveEventId(eventId);
+          setTab("discovery");
+        }}
       />
     </DashboardShell>
   );

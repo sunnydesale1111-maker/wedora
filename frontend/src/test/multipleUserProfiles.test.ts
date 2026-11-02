@@ -285,4 +285,39 @@ describe('Wedora Multiple User Profiles Test Suite', () => {
       expect(vendorRouteCode).not.toContain('organizerClients');
     });
   });
+
+  // =========================================================================
+  // PART E — FINAL APPROVED UI ENHANCEMENTS
+  // =========================================================================
+  describe('Part E: Final Approved UI Enhancements', () => {
+    it('16. Customer dashboard uses profile dropdown control and removes separate banner', () => {
+      const customerRoutePath = path.resolve(__dirname, '../routes/customer.tsx');
+      expect(fs.existsSync(customerRoutePath)).toBe(true);
+
+      const customerCode = fs.readFileSync(customerRoutePath, 'utf8');
+      expect(customerCode).toContain('CustomerProfileDropdown');
+      expect(customerCode).not.toContain('Customer Multi-Profile Header Bar');
+      expect(customerCode).not.toContain('isProfileSelectorOpen');
+    });
+
+    it('17. Planner dashboard opens detailed event popup with checklist, budget fluctuation, and booking actions', () => {
+      const plannerRoutePath = path.resolve(__dirname, '../routes/planner.tsx');
+      expect(fs.existsSync(plannerRoutePath)).toBe(true);
+
+      const plannerCode = fs.readFileSync(plannerRoutePath, 'utf8');
+      expect(plannerCode).toContain('ClientEventDetailModal');
+      expect(plannerCode).toContain('setSelectedDetailEvent');
+      expect(plannerCode).not.toContain('ORGANIZER CLIENT CONTEXT SWITCHER BAR');
+
+      // Modal component exists and has required sections
+      const modalPath = path.resolve(__dirname, '../components/planner/ClientEventDetailModal.tsx');
+      expect(fs.existsSync(modalPath)).toBe(true);
+
+      const modalCode = fs.readFileSync(modalPath, 'utf8');
+      expect(modalCode).toContain('Event Overview');
+      expect(modalCode).toContain('Planning Checklist');
+      expect(modalCode).toContain('Budget Fluctuation');
+      expect(modalCode).toContain('Vendors & Contracts');
+    });
+  });
 });
