@@ -11,13 +11,12 @@ import {
   Home,
   Flame,
   Briefcase,
-  Clock,
-  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Mandala } from "@/components/brand";
 import {
   AUTO_SLIDE_INTERVAL,
+  SLIDE_TRANSITION_DURATION,
   HERO_CAROUSEL_READABLE_INTERVAL_MS,
 } from "@/config/features";
 
@@ -160,7 +159,7 @@ export const EVENT_HERO_SLIDES: EventHeroSlide[] = [
 interface EventHeroCarouselProps {
   /**
    * Autoplay interval in milliseconds.
-   * Defaults to AUTO_SLIDE_INTERVAL (350 ms).
+   * Defaults to AUTO_SLIDE_INTERVAL (5000 ms).
    */
   intervalMs?: number;
 }
@@ -172,6 +171,7 @@ export function EventHeroCarousel({
   const [activeInterval, setActiveInterval] = useState(intervalMs);
   const [isPaused, setIsPaused] = useState(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const [timerResetKey, setTimerResetKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Check for reduced motion accessibility preference
@@ -186,19 +186,26 @@ export function EventHeroCarousel({
 
   const totalSlides = EVENT_HERO_SLIDES.length;
 
+  const resetCountdown = useCallback(() => {
+    setTimerResetKey((prev) => prev + 1);
+  }, []);
+
   const nextSlide = useCallback(() => {
     setActiveIndex((prev) => (prev + 1) % totalSlides);
-  }, [totalSlides]);
+    resetCountdown();
+  }, [totalSlides, resetCountdown]);
 
   const prevSlide = useCallback(() => {
     setActiveIndex((prev) => (prev - 1 + totalSlides) % totalSlides);
-  }, [totalSlides]);
+    resetCountdown();
+  }, [totalSlides, resetCountdown]);
 
   const goToSlide = useCallback((index: number) => {
     setActiveIndex(index);
-  }, []);
+    resetCountdown();
+  }, [resetCountdown]);
 
-  // Autoplay timer with pause on hover/interaction and continuous looping
+  // Autoplay timer with pause on hover/interaction, reset on manual click, and continuous looping
   useEffect(() => {
     if (isPaused || prefersReducedMotion) return;
 
@@ -207,19 +214,15 @@ export function EventHeroCarousel({
     }, activeInterval);
 
     return () => clearInterval(timer);
-  }, [isPaused, prefersReducedMotion, activeInterval, totalSlides]);
+  }, [isPaused, prefersReducedMotion, activeInterval, totalSlides, timerResetKey]);
 
   const currentSlide = EVENT_HERO_SLIDES[activeIndex];
-
-  // At 350ms interval, transitionDurationMs is set to 150ms.
-  // This provides 150ms of smooth sliding, followed by 200ms of resting display before the next slide advances.
-  // At 3000ms readable interval, transitionDurationMs is 500ms.
-  const transitionDurationMs = activeInterval <= 500 ? 150 : 500;
+  const transitionDurationMs = SLIDE_TRANSITION_DURATION;
 
   return (
     <section
       ref={containerRef}
-      className="relative mx-auto grid max-w-7xl items-center gap-10 px-6 pb-20 pt-6 lg:grid-cols-[1.05fr_1.15fr]"
+      className="relative mx-auto w-full max-w-[1440px] px-6 sm:px-8 lg:px-12 py-8 lg:py-10 xl:py-12 min-h-[500px] lg:min-h-[560px] xl:min-h-[640px] xl:max-h-[660px] grid lg:grid-cols-[45%_55%] items-center gap-8 lg:gap-12 xl:gap-16"
       onMouseEnter={() => setIsPaused(true)}
       onMouseLeave={() => setIsPaused(false)}
       onFocus={() => setIsPaused(true)}
@@ -228,15 +231,15 @@ export function EventHeroCarousel({
       aria-label="Wedora Event Celebrations Showcase"
     >
       {/* Decorative Traditional Mandala watermark on right side */}
-      <Mandala className="absolute -right-24 top-1/2 -translate-y-1/2 size-[28rem] text-gold/15 pointer-events-none" />
+      <Mandala className="absolute -right-20 top-1/2 -translate-y-1/2 size-[28rem] lg:size-[34rem] text-gold/15 pointer-events-none select-none" />
 
-      {/* LEFT SIDE: Event photograph inside approved elegant arched frame */}
-      <div className="relative mx-auto w-full max-w-lg animate-rise order-1 lg:order-1 flex flex-col items-center sm:items-start">
-        {/* Decorative Arched Frame matching approved visual mockup */}
-        <div className="relative w-full rounded-tl-3xl rounded-bl-3xl rounded-tr-[12rem] rounded-br-3xl overflow-hidden shadow-float bg-card border border-gold/40">
+      {/* LEFT SIDE: Event photograph inside approved elegant arched frame (45% column on desktop) */}
+      <div className="relative mx-auto w-full flex flex-col items-center order-1 lg:order-1 animate-rise">
+        {/* Decorative Arched Frame matching approved visual mockup (approx 600x560px on desktop) */}
+        <div className="relative w-full max-w-[600px] h-[300px] sm:h-[380px] md:h-[440px] lg:h-[500px] xl:h-[560px] rounded-tl-3xl rounded-bl-3xl rounded-tr-[9rem] sm:rounded-tr-[12rem] lg:rounded-tr-[14rem] rounded-br-3xl overflow-hidden shadow-float bg-card border border-gold/40">
           {/* Horizontal Sliding Image Track */}
           <div
-            className="w-full flex ease-out"
+            className="w-full h-full flex ease-in-out"
             style={{
               transform: `translateX(-${activeIndex * 100}%)`,
               transitionProperty: "transform",
@@ -244,14 +247,14 @@ export function EventHeroCarousel({
             }}
           >
             {EVENT_HERO_SLIDES.map((slide, idx) => (
-              <div key={slide.id} className="w-full shrink-0 flex-none relative aspect-[16/10] sm:aspect-[4/3]">
+              <div key={slide.id} className="w-full h-full shrink-0 flex-none relative">
                 <img
                   src={slide.image}
                   alt={slide.imageAlt}
-                  width={839}
-                  height={524}
+                  width={1164}
+                  height={720}
                   loading={idx === 0 ? "eager" : "lazy"}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover object-center"
                 />
               </div>
             ))}
@@ -269,8 +272,8 @@ export function EventHeroCarousel({
           </div>
         </div>
 
-        {/* Six Slide Indicators Below Photograph (matching mockup placement) */}
-        <div className="mt-4 flex items-center gap-3 w-full justify-between sm:justify-start">
+        {/* Six Slide Indicators & Navigation Below Photograph (matching mockup placement) */}
+        <div className="mt-4 flex items-center gap-3 w-full max-w-[600px] justify-between">
           <div className="flex items-center gap-2" role="tablist" aria-label="Event Banners">
             {EVENT_HERO_SLIDES.map((slide, idx) => {
               const isActive = activeIndex === idx;
@@ -278,10 +281,10 @@ export function EventHeroCarousel({
                 <button
                   key={slide.id}
                   onClick={() => goToSlide(idx)}
-                  className={`group relative flex items-center justify-center transition-all duration-200 ${
+                  className={`group relative flex items-center justify-center transition-all duration-300 ${
                     isActive
-                      ? "w-6 h-2 rounded-full bg-plum shadow-xs"
-                      : "w-2 h-2 rounded-full bg-gold/40 hover:bg-gold/80"
+                      ? "w-7 h-2.5 rounded-full bg-plum shadow-xs"
+                      : "w-2.5 h-2.5 rounded-full bg-gold/40 hover:bg-gold/80"
                   }`}
                   role="tab"
                   aria-selected={isActive}
@@ -294,71 +297,44 @@ export function EventHeroCarousel({
           </div>
 
           {/* Slide Indicator Label */}
-          <span className="text-[11px] font-semibold text-muted-foreground">
+          <span className="text-[11px] sm:text-xs font-semibold text-muted-foreground">
             <span className="text-plum font-bold">{activeIndex + 1}</span> / {totalSlides} · {currentSlide.eventType}
           </span>
 
-          {/* Speed Toggle: 350ms Trial vs 3.0s Readable */}
-          <div className="inline-flex items-center rounded-full border border-border/80 bg-background/90 p-0.5 text-[11px] font-medium shadow-2xs ml-auto">
-            <button
-              type="button"
-              onClick={() => setActiveInterval(AUTO_SLIDE_INTERVAL)}
-              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full transition ${
-                activeInterval <= 500
-                  ? "bg-plum text-gold font-bold shadow-xs"
-                  : "text-muted-foreground hover:text-plum"
-              }`}
-              title="350ms rapid transition trial"
-            >
-              <Zap className="size-3" />
-              <span>350ms</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveInterval(HERO_CAROUSEL_READABLE_INTERVAL_MS)}
-              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full transition ${
-                activeInterval > 500
-                  ? "bg-plum text-gold font-bold shadow-xs"
-                  : "text-muted-foreground hover:text-plum"
-              }`}
-              title="3,000ms safe readable transition"
-            >
-              <Clock className="size-3" />
-              <span>3.0s</span>
-            </button>
-          </div>
-
           {/* Manual Previous / Next Buttons */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={prevSlide}
               aria-label="Previous slide"
-              className="p-1 rounded-full border border-border/80 bg-background/80 hover:bg-gold-soft hover:text-plum text-muted-foreground transition shadow-2xs"
+              className="p-1.5 rounded-full border border-border/80 bg-background/80 hover:bg-gold-soft hover:text-plum text-muted-foreground transition shadow-2xs"
             >
-              <ChevronLeft className="size-3.5" />
+              <ChevronLeft className="size-4" />
             </button>
             <button
               onClick={nextSlide}
               aria-label="Next slide"
-              className="p-1 rounded-full border border-border/80 bg-background/80 hover:bg-gold-soft hover:text-plum text-muted-foreground transition shadow-2xs"
+              className="p-1.5 rounded-full border border-border/80 bg-background/80 hover:bg-gold-soft hover:text-plum text-muted-foreground transition shadow-2xs"
             >
-              <ChevronRight className="size-3.5" />
+              <ChevronRight className="size-4" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* RIGHT SIDE: Event information, Fixed CTAs, and Platform statistics */}
-      <div className="relative animate-rise z-10 flex flex-col justify-between order-2 lg:order-2 pl-0 lg:pl-4">
-        {/* Small Heading: AI EVENT PLANNING PLATFORM */}
+      {/* RIGHT SIDE: Rotating event information, Fixed CTAs, and Stationary Platform statistics (55% column on desktop) */}
+      <div className="relative animate-rise z-10 flex flex-col justify-between order-2 lg:order-2 pl-0 lg:pl-6 xl:pl-8">
+        {/* Small Heading: AI EVENT PLANNING PLATFORM and Rotating Event Badge */}
         <div className="mb-3 inline-flex items-center gap-2 text-xs uppercase tracking-[0.22em] text-[#8C3A4D] font-bold">
+          <span className="inline-block w-2 h-2 rounded-full bg-gold animate-pulse" />
           <span>AI EVENT PLANNING PLATFORM</span>
+          <span className="text-muted-foreground/60">·</span>
+          <span className="text-plum font-semibold tracking-normal normal-case">{currentSlide.badge}</span>
         </div>
 
-        {/* Rotating Event-Specific Content (Headline + Description) with fixed min-height */}
-        <div className="relative overflow-hidden min-h-[160px] sm:min-h-[175px] md:min-h-[190px] flex items-center">
+        {/* Rotating Event-Specific Content (Headline + Description) with fixed min-height to prevent layout shifts */}
+        <div className="relative overflow-hidden min-h-[190px] sm:min-h-[210px] md:min-h-[230px] lg:min-h-[250px] xl:min-h-[280px] flex items-center">
           <div
-            className="w-full flex ease-out"
+            className="w-full flex ease-in-out"
             style={{
               transform: `translateX(-${activeIndex * 100}%)`,
               transitionProperty: "transform",
@@ -371,10 +347,10 @@ export function EventHeroCarousel({
                 className="w-full shrink-0 flex-none pr-4"
                 aria-hidden={activeIndex !== idx}
               >
-                <h1 className="text-4xl leading-[1.08] text-plum sm:text-5xl md:text-6xl font-display font-semibold tracking-tight">
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[54px] xl:text-[62px] 2xl:text-[66px] leading-[1.08] text-plum font-display font-semibold tracking-tight">
                   {slide.headline}
                 </h1>
-                <p className="mt-4 max-w-lg text-base sm:text-lg text-muted-foreground leading-relaxed">
+                <p className="mt-4 max-w-xl text-base sm:text-[17px] lg:text-[18px] xl:text-[20px] text-muted-foreground leading-relaxed">
                   {slide.description}
                 </p>
               </div>
@@ -388,7 +364,7 @@ export function EventHeroCarousel({
             asChild
             variant="hero"
             size="xl"
-            className="rounded-full bg-plum hover:bg-plum/90 text-primary-foreground font-semibold px-7 shadow-soft text-sm sm:text-base h-12"
+            className="rounded-full bg-plum hover:bg-plum/90 text-primary-foreground font-semibold px-8 shadow-soft text-sm sm:text-base h-12 lg:h-[50px]"
           >
             <Link to="/professionals">
               <span>Join as a Professional</span>
@@ -400,7 +376,7 @@ export function EventHeroCarousel({
             asChild
             variant="soft"
             size="xl"
-            className="rounded-full border border-plum/30 bg-card hover:bg-gold-soft text-plum font-semibold px-7 text-sm sm:text-base h-12 shadow-2xs"
+            className="rounded-full border border-plum/30 bg-card hover:bg-gold-soft text-plum font-semibold px-8 text-sm sm:text-base h-12 lg:h-[50px] shadow-2xs"
           >
             <Link to="/get-started" search={{ role: "CUSTOMER" }}>
               <span>Plan an Event</span>

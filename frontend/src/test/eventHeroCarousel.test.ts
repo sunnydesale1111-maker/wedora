@@ -4,12 +4,13 @@ import * as path from "path";
 import {
   ENABLE_EVENT_HERO_CAROUSEL,
   AUTO_SLIDE_INTERVAL,
+  SLIDE_TRANSITION_DURATION,
   HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS,
   HERO_CAROUSEL_READABLE_INTERVAL_MS,
 } from "../config/features";
 import { EVENT_HERO_SLIDES } from "../components/home/EventHeroCarousel";
 
-describe("WEDORA – FINAL HOMEPAGE HERO BANNER IMPLEMENTATION", () => {
+describe("WEDORA – FIX HOMEPAGE BANNER SIZE, LAYOUT AND CAROUSEL TIMING", () => {
   const indexTsxPath = path.resolve(__dirname, "../routes/index.tsx");
   const carouselTsxPath = path.resolve(__dirname, "../components/home/EventHeroCarousel.tsx");
   const weddingHeroTsxPath = path.resolve(__dirname, "../components/home/WeddingHero.tsx");
@@ -60,18 +61,27 @@ describe("WEDORA – FINAL HOMEPAGE HERO BANNER IMPLEMENTATION", () => {
     });
   });
 
-  describe("2. Reproduce Approved Wedora Design & Layout", () => {
-    it("places the event photograph on the left and event content on the right", () => {
-      expect(carouselContent).toContain("lg:grid-cols-[1.05fr_1.15fr]");
-      // Left side has arched frame
-      expect(carouselContent).toContain("rounded-tr-[12rem]");
-      // Right side has small heading
-      expect(carouselContent).toContain("AI EVENT PLANNING PLATFORM");
+  describe("2. Desktop Layout & Sizing (1440px canvas, 45% left, 55% right)", () => {
+    it("uses 1440px max width canvas and 45%/55% desktop columns", () => {
+      expect(carouselContent).toContain("max-w-[1440px]");
+      expect(carouselContent).toContain("lg:grid-cols-[45%_55%]");
+    });
+
+    it("sizes the photo frame for responsive desktop screens (up to 600x560px)", () => {
+      expect(carouselContent).toContain("max-w-[600px]");
+      expect(carouselContent).toContain("xl:h-[560px]");
+      expect(carouselContent).toContain("rounded-tr-[9rem] sm:rounded-tr-[12rem] lg:rounded-tr-[14rem]");
     });
 
     it("features subtle gold decorative mandala pattern on the right side", () => {
       expect(carouselContent).toContain("<Mandala");
       expect(carouselContent).toContain("text-gold/15");
+    });
+
+    it("styles rotating headline and description within approved typography bounds", () => {
+      expect(carouselContent).toContain("lg:text-[54px] xl:text-[62px] 2xl:text-[66px]");
+      expect(carouselContent).toContain("lg:text-[18px] xl:text-[20px]");
+      expect(carouselContent).toContain("h-12 lg:h-[50px]");
     });
   });
 
@@ -150,12 +160,13 @@ describe("WEDORA – FINAL HOMEPAGE HERO BANNER IMPLEMENTATION", () => {
     });
   });
 
-  describe("4. Automatic Carousel Timing (350 ms)", () => {
-    it("configures AUTO_SLIDE_INTERVAL to 350 ms", () => {
-      expect(AUTO_SLIDE_INTERVAL).toBe(350);
-      expect(HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS).toBe(350);
-      expect(HERO_CAROUSEL_READABLE_INTERVAL_MS).toBe(3000);
-      expect(featuresContent).toContain("export const AUTO_SLIDE_INTERVAL = 350;");
+  describe("4. Automatic Carousel Timing & Transition Behavior", () => {
+    it("configures AUTO_SLIDE_INTERVAL to 5000 ms and SLIDE_TRANSITION_DURATION to 600 ms", () => {
+      expect(AUTO_SLIDE_INTERVAL).toBe(5000);
+      expect(SLIDE_TRANSITION_DURATION).toBe(600);
+      expect(HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS).toBe(5000);
+      expect(featuresContent).toContain("export const AUTO_SLIDE_INTERVAL = 5000;");
+      expect(featuresContent).toContain("export const SLIDE_TRANSITION_DURATION = 600;");
     });
 
     it("provides six slide indicators with accessible tab roles", () => {
@@ -165,11 +176,12 @@ describe("WEDORA – FINAL HOMEPAGE HERO BANNER IMPLEMENTATION", () => {
       expect(carouselContent).toContain("Go to slide");
     });
 
-    it("supports manual previous and next navigation controls", () => {
+    it("supports manual previous and next navigation controls with countdown reset", () => {
       expect(carouselContent).toContain('aria-label="Previous slide"');
       expect(carouselContent).toContain('aria-label="Next slide"');
       expect(carouselContent).toContain("prevSlide");
       expect(carouselContent).toContain("nextSlide");
+      expect(carouselContent).toContain("resetCountdown");
     });
 
     it("pauses automatic movement during user hover and focus interactions", () => {
@@ -207,8 +219,8 @@ describe("WEDORA – FINAL HOMEPAGE HERO BANNER IMPLEMENTATION", () => {
       expect(carouselContent).toContain("Categories");
     });
 
-    it("ensures zero layout shift with fixed min-height container and fixed aspect ratio", () => {
-      expect(carouselContent).toContain("min-h-[160px]");
+    it("ensures zero layout shift with reserved min-height container and fixed aspect ratio", () => {
+      expect(carouselContent).toContain("min-h-[190px]");
       expect(carouselContent).toContain("overflow-hidden");
     });
   });

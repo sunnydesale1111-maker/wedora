@@ -17,22 +17,28 @@ export const ENABLE_EVENT_HERO_CAROUSEL = true;
 /**
  * AUTO_SLIDE_INTERVAL
  *
- * The final requested autoplay transition interval for the event hero carousel (350 ms).
- * Each banner automatically advances after 350 milliseconds.
+ * The official autoplay interval for the event hero carousel: 5000 ms (5 seconds).
+ * Each banner automatically displays for 5 seconds before advancing.
  */
-export const AUTO_SLIDE_INTERVAL = 350;
+export const AUTO_SLIDE_INTERVAL = 5000;
+
+/**
+ * SLIDE_TRANSITION_DURATION
+ *
+ * The horizontal sliding animation duration: 600 ms.
+ */
+export const SLIDE_TRANSITION_DURATION = 600;
 
 /**
  * HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS
  *
- * Alias for AUTO_SLIDE_INTERVAL (350 ms).
+ * Alias for AUTO_SLIDE_INTERVAL (5000 ms).
  */
 export const HERO_CAROUSEL_AUTOPLAY_INTERVAL_MS = AUTO_SLIDE_INTERVAL;
 
 /**
  * HERO_CAROUSEL_READABLE_INTERVAL_MS
  *
- * Safe fallback / readable interval option (3,000 ms) allowing human visitors
- * to comfortably read banner headlines and descriptions.
+ * Human reading interval option (5000 ms).
  */
-export const HERO_CAROUSEL_READABLE_INTERVAL_MS = 3000;
+export const HERO_CAROUSEL_READABLE_INTERVAL_MS = 5000;
