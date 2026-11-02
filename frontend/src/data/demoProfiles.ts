@@ -89,3 +89,4 @@ export const INITIAL_DEMO_ORGANIZER_CLIENTS: OrganizerClientProfile[] = [
     updatedAt: '2026-10-18T14:00:00.000Z',
   },
 ];
+

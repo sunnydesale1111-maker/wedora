@@ -81,3 +81,4 @@ export const DEFAULT_FAMILY_PERMISSIONS: CustomerProfilePermissions = {
 };
 
 export const MAX_ADDITIONAL_FAMILY_PROFILES = 5;
+

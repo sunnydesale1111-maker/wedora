@@ -103,7 +103,7 @@ export function DashboardShell({
               title="Click to change city"
             >
               <MapPin className="size-3.5 text-gold shrink-0" />
-              <span>{city}</span>
+              <span suppressHydrationWarning>{city}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
             </button>
 

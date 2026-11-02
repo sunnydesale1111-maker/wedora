@@ -140,3 +140,4 @@ CREATE TRIGGER trg_enforce_max_family_profiles
     BEFORE INSERT OR UPDATE ON "customer_family_profiles"
     FOR EACH ROW
     EXECUTE FUNCTION enforce_max_family_profiles();
+

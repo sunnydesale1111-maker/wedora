@@ -17,3 +17,4 @@ router.put('/organizer/clients/:id', authenticateToken, ProfileController.update
 router.post('/organizer/clients/:id/archive', authenticateToken, ProfileController.archiveOrganizerClient);
 
 export default router;
+

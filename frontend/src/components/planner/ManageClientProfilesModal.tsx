@@ -617,3 +617,4 @@ export function ManageClientProfilesModal({
     </div>
   );
 }
+

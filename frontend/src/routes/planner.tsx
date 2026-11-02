@@ -100,6 +100,7 @@ function PlannerPortal() {
   const [eventFilterMode, setEventFilterMode] = useState<"ACTIVE_CLIENT" | "ALL">("ACTIVE_CLIENT");
 
   // New Event creation modal/state
+  const [showNewEventModal, setShowNewEventModal] = useState(false);
   const [newEventClientName, setNewEventClientName] = useState("");
   const [newEventClientPhone, setNewEventClientPhone] = useState("+91 98200 11223");
   const [newEventName, setNewEventName] = useState("");
