@@ -63,3 +63,4 @@ CREATE POLICY "participant_view_accepted_event"
             user_id = auth.uid() OR email = auth.jwt() ->> 'email'
         )
     );
+
