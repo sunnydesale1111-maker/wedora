@@ -61,16 +61,16 @@ describe("WEDORA – FIX HOMEPAGE BANNER SIZE, LAYOUT AND CAROUSEL TIMING", () =
     });
   });
 
-  describe("2. Desktop Layout & Sizing (1440px canvas, 45% left, 55% right)", () => {
-    it("uses 1440px max width canvas and 45%/55% desktop columns", () => {
-      expect(carouselContent).toContain("max-w-[1440px]");
-      expect(carouselContent).toContain("lg:grid-cols-[45%_55%]");
+  describe("2. Desktop Layout & Sizing (Expanded by ~2-2.5 inches on 16-inch laptop)", () => {
+    it("uses expanded max width canvas and 46%/54% desktop columns", () => {
+      expect(carouselContent).toContain("max-w-[1640px]");
+      expect(carouselContent).toContain("lg:grid-cols-[46%_54%]");
     });
 
-    it("sizes the photo frame for responsive desktop screens (up to 600x560px)", () => {
-      expect(carouselContent).toContain("max-w-[600px]");
-      expect(carouselContent).toContain("xl:h-[560px]");
-      expect(carouselContent).toContain("rounded-tr-[9rem] sm:rounded-tr-[12rem] lg:rounded-tr-[14rem]");
+    it("sizes the photo frame proportionally for 16-inch laptop and desktop (up to 740x690px)", () => {
+      expect(carouselContent).toContain("lg:max-w-[700px] xl:max-w-[740px]");
+      expect(carouselContent).toContain("xl:h-[650px]");
+      expect(carouselContent).toContain("rounded-tr-[10rem] sm:rounded-tr-[13rem] lg:rounded-tr-[16rem] xl:rounded-tr-[18rem]");
     });
 
     it("features subtle gold decorative mandala pattern on the right side", () => {
@@ -78,10 +78,10 @@ describe("WEDORA – FIX HOMEPAGE BANNER SIZE, LAYOUT AND CAROUSEL TIMING", () =
       expect(carouselContent).toContain("text-gold/15");
     });
 
-    it("styles rotating headline and description within approved typography bounds", () => {
-      expect(carouselContent).toContain("lg:text-[54px] xl:text-[62px] 2xl:text-[66px]");
-      expect(carouselContent).toContain("lg:text-[18px] xl:text-[20px]");
-      expect(carouselContent).toContain("h-12 lg:h-[50px]");
+    it("styles rotating headline and description within scaled-up typography bounds", () => {
+      expect(carouselContent).toContain("lg:text-[58px] xl:text-[68px] 2xl:text-[74px]");
+      expect(carouselContent).toContain("lg:text-[19px] xl:text-[21px]");
+      expect(carouselContent).toContain("lg:h-[56px] xl:h-[58px]");
     });
   });
 
@@ -220,7 +220,7 @@ describe("WEDORA – FIX HOMEPAGE BANNER SIZE, LAYOUT AND CAROUSEL TIMING", () =
     });
 
     it("ensures zero layout shift with reserved min-height container and fixed aspect ratio", () => {
-      expect(carouselContent).toContain("min-h-[190px]");
+      expect(carouselContent).toContain("min-h-[200px]");
       expect(carouselContent).toContain("overflow-hidden");
     });
   });
