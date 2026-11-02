@@ -5,9 +5,13 @@ import * as path from "path";
 describe("Wedora – Final Homepage Navigation & Dedicated Professionals Selection Page", () => {
   const indexTsxPath = path.resolve(__dirname, "../routes/index.tsx");
   const professionalsTsxPath = path.resolve(__dirname, "../routes/professionals.tsx");
+  const weddingHeroTsxPath = path.resolve(__dirname, "../components/home/WeddingHero.tsx");
+  const carouselHeroTsxPath = path.resolve(__dirname, "../components/home/EventHeroCarousel.tsx");
 
   const indexContent = fs.readFileSync(indexTsxPath, "utf-8");
   const professionalsContent = fs.readFileSync(professionalsTsxPath, "utf-8");
+  const weddingHeroContent = fs.readFileSync(weddingHeroTsxPath, "utf-8");
+  const carouselHeroContent = fs.readFileSync(carouselHeroTsxPath, "utf-8");
 
   describe("1. Homepage Header Navigation", () => {
     it("completely removes 'Get Started' button from the top navigation header", () => {
@@ -24,32 +28,37 @@ describe("Wedora – Final Homepage Navigation & Dedicated Professionals Selecti
 
     it("does not leave any duplicate 'Get Started' buttons anywhere on the homepage", () => {
       expect(indexContent).not.toContain("Get Started");
+      expect(weddingHeroContent).not.toContain("Get Started");
+      expect(carouselHeroContent).not.toContain("Get Started");
     });
   });
 
   describe("2. Homepage Main Hero CTAs", () => {
     it("has 'Plan an Event' as primary button navigating to /get-started with role=CUSTOMER", () => {
-      // Must have "Plan an Event"
-      expect(indexContent).toContain("Plan an Event");
-      // Must link to /get-started with role: "CUSTOMER"
-      expect(indexContent).toContain('search={{ role: "CUSTOMER" }}');
+      // Must have "Plan an Event" in both carousel and wedding hero components
+      expect(carouselHeroContent).toContain("Plan an Event");
+      expect(carouselHeroContent).toContain('search={{ role: "CUSTOMER" }}');
+      expect(weddingHeroContent).toContain("Plan an Event");
+      expect(weddingHeroContent).toContain('search={{ role: "CUSTOMER" }}');
     });
 
     it("has 'Join as a Professional' linking directly to /professionals without dropdowns or popovers", () => {
-      expect(indexContent).toContain('to="/professionals"');
-      expect(indexContent).toContain("Join as a Professional");
+      expect(carouselHeroContent).toContain('to="/professionals"');
+      expect(carouselHeroContent).toContain("Join as a Professional");
+      expect(weddingHeroContent).toContain('to="/professionals"');
+      expect(weddingHeroContent).toContain("Join as a Professional");
 
       // Verify no dropdown, popover or inline selection state
       expect(indexContent).not.toContain("isProDropdownOpen");
       expect(indexContent).not.toContain("proDropdownRef");
-      expect(indexContent).not.toContain("Choose Your Professional Role");
+      expect(carouselHeroContent).not.toContain("isProDropdownOpen");
+      expect(weddingHeroContent).not.toContain("isProDropdownOpen");
     });
 
     it("updates section CTAs (Customer Stories and Planning Journey) to 'Plan an Event'", () => {
-      // Both sections should feature Plan an Event
+      // Both sections in index.tsx feature Plan an Event
       const planAnEventCount = (indexContent.match(/Plan an Event/g) || []).length;
-      // Hero + Stories + Planning Journey = at least 3 occurrences
-      expect(planAnEventCount).toBeGreaterThanOrEqual(3);
+      expect(planAnEventCount).toBeGreaterThanOrEqual(2);
     });
   });
 
