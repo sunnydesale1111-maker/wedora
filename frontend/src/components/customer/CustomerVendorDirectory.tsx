@@ -30,6 +30,7 @@ import { ParsedPlannerCommand } from '@/utils/plannerVoiceNlu';
 import { CustomerVoiceAssistant } from './CustomerVoiceAssistant';
 import { VendorProfileModal } from '@/components/vendors/VendorProfileModal';
 import { RequestQuotationModal } from '@/components/bookings/RequestQuotationModal';
+import { formatRating } from '@/utils/formatters';
 
 interface CustomerVendorDirectoryProps {
   activeEvent: WeddingEvent;
@@ -383,7 +384,7 @@ export const CustomerVendorDirectory: React.FC<CustomerVendorDirectoryProps> = (
                   <div className="flex items-center gap-3 mt-3 text-xs">
                     <div className="flex items-center gap-1 font-bold text-navy">
                       <Star className="size-3.5 fill-gold text-gold" />
-                      <span>{(vendor.rating || 4.7).toFixed(1)}</span>
+                      <span>{formatRating(vendor.rating, 4.8)}</span>
                     </div>
                     <span className="text-muted-foreground">·</span>
                     <span className="text-muted-foreground">
@@ -448,20 +449,37 @@ export const CustomerVendorDirectory: React.FC<CustomerVendorDirectoryProps> = (
       ) : (
         <div className="rounded-3xl border bg-card p-10 text-center space-y-3">
           <Store className="size-10 text-gold mx-auto" />
-          <h3 className="font-display font-semibold text-plum text-lg">No vendors found</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            No vendors found matching your selected category and locality. Try resetting your filter or speaking another locality to the AI Assistant.
+          <h3 className="font-display font-semibold text-plum text-lg">No vendors found in this area</h3>
+          <p className="text-xs text-muted-foreground max-w-md mx-auto">
+            I couldn't find a suitable match in this area. Would you like me to check nearby locations?
           </p>
-          <Button
-            variant="soft"
-            size="sm"
-            onClick={() => {
-              setSelectedCategory('ALL');
-              setVoiceQueryFilter({});
-            }}
-          >
-            Clear Filters
-          </Button>
+          <div className="flex items-center justify-center gap-3 pt-2">
+            <Button
+              variant="soft"
+              size="sm"
+              onClick={() => {
+                setLocalityFilter(activeEvent.city);
+                setVoiceQueryFilter({});
+              }}
+            >
+              Check Nearby Locations
+            </Button>
+            <Button
+              variant="hero"
+              size="sm"
+              onClick={() => {
+                setSelectedCategory('ALL');
+                setLocalityFilter(
+                  activeEvent.area
+                    ? `${activeEvent.area}, ${activeEvent.city}`
+                    : activeEvent.city
+                );
+                setVoiceQueryFilter({});
+              }}
+            >
+              Reset Filters
+            </Button>
+          </div>
         </div>
       )}
 

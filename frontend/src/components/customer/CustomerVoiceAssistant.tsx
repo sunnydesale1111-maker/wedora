@@ -58,7 +58,10 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
         recognition.lang =
           detectedLang === 'mr' ? 'mr-IN' : detectedLang === 'hi' ? 'hi-IN' : 'en-IN';
 
-        recognition.onstart = () => setIsListening(true);
+        recognition.onstart = () => {
+          stopSpeaking();
+          setIsListening(true);
+        };
         recognition.onend = () => setIsListening(false);
         recognition.onerror = () => setIsListening(false);
 
@@ -81,14 +84,44 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
     };
   }, [detectedLang]);
 
-  // Text-to-speech
+  const stopSpeaking = () => {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  };
+
+  // Text-to-speech with natural pacing and prompt playback
   const speakText = (text: string, lang: VoiceLanguage) => {
     if (!speechEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === 'mr' ? 'mr-IN' : lang === 'hi' ? 'hi-IN' : 'en-IN';
-    utterance.rate = 1.0;
+    // Conversational pacing: 1.08 provides crisp, natural delivery without sluggish stretched words
+    utterance.rate = 1.08;
+    utterance.pitch = 1.0;
+
+    // Prefer natural/neural voice if available on system
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0) {
+        const langPrefix = lang === 'mr' ? 'mr' : lang === 'hi' ? 'hi' : 'en';
+        const bestVoice =
+          voices.find(
+            (v) =>
+              v.lang.toLowerCase().startsWith(langPrefix) &&
+              (v.name.includes('Natural') ||
+                v.name.includes('Neural') ||
+                v.name.includes('Google') ||
+                v.name.includes('Online'))
+          ) || voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
+
+        if (bestVoice) {
+          utterance.voice = bestVoice;
+        }
+      }
+    } catch {}
 
     utterance.onstart = () => setIsSpeaking(true);
     utterance.onend = () => setIsSpeaking(false);
@@ -98,6 +131,7 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
   };
 
   const toggleListening = () => {
+    stopSpeaking();
     if (isListening) {
       try {
         recognitionRef.current?.stop();
@@ -116,11 +150,14 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
     const text = (textToRun !== undefined ? textToRun : inputText).trim();
     if (!text) return;
 
+    stopSpeaking();
+
     const parsed = parsePlannerVoiceCommand(text, {
       activeCity: activeEvent.city as any,
       activeArea: activeEvent.area,
       activeEventDate: activeEvent.eventDate,
       activeEventName: activeEvent.eventName,
+      role: 'CUSTOMER',
     });
 
     setDetectedLang(parsed.detectedLang);
@@ -201,7 +238,10 @@ export const CustomerVoiceAssistant: React.FC<CustomerVoiceAssistantProps> = ({
         <input
           type="text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => {
+            if (isSpeaking) stopSpeaking();
+            setInputText(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') handleExecute();
           }}

@@ -30,6 +30,7 @@ import { PlannerVoiceAssistant } from './PlannerVoiceAssistant';
 import { EventPerformanceForecast } from './EventPerformanceForecast';
 import { PlannerVendorCalendar } from './PlannerVendorCalendar';
 import { VendorSwapModal } from './VendorSwapModal';
+import { formatRating } from '@/utils/formatters';
 
 export const PlannerVendorDirectory: React.FC = () => {
   const {
@@ -316,7 +317,7 @@ export const PlannerVendorDirectory: React.FC = () => {
                         <div className="flex items-center justify-between font-semibold">
                           <div className="flex items-center gap-1 text-amber-500">
                             <Star className="size-3.5 fill-amber-500" />
-                            <span className="text-navy">{record.clientRating} / 5.0</span>
+                            <span className="text-navy">{formatRating(record.clientRating, 4.8)} / 5.0</span>
                           </div>
                           <span className="text-emerald-700">
                             {record.onTimeDeliveryRate}% On-Time Score

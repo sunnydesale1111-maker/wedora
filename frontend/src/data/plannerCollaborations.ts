@@ -399,7 +399,7 @@ function generateCollaborationsForAllLocalities(
           locationLabel: `${loc.canonicalName}, ${loc.city}`,
           eventsCompletedTogether: 4 + (seed % 5),
           lastEventDate: `2026-0${7 + (seed % 3)}-${String(10 + (seed % 15)).padStart(2, '0')}`,
-          clientRating: 4.8 + ((seed % 3 === 0) ? 0.1 : 0),
+          clientRating: Number((4.8 + ((seed % 3 === 0) ? 0.1 : 0)).toFixed(1)),
           onTimeDeliveryRate: 96 + (seed % 4),
           serviceQualityScore: 97 + (seed % 3),
           collaborationNotes: `Verified collaboration with ${candidate.businessName} in ${loc.canonicalName}. Punctual, exceptional team coordination and high client ratings.`,

@@ -23,6 +23,7 @@ import { DEMO_VENDORS } from '@/data/demoVendors';
 import { isOrganizerCategory } from '@/types/shortlist';
 import { VendorProfileModal } from '@/components/vendors/VendorProfileModal';
 import { RequestQuotationModal } from '@/components/bookings/RequestQuotationModal';
+import { formatRating } from '@/utils/formatters';
 
 interface EventOrganizerDirectoryProps {
   activeEvent: WeddingEvent;
@@ -261,7 +262,7 @@ export const EventOrganizerDirectory: React.FC<EventOrganizerDirectoryProps> = (
                     <div className="flex items-center gap-2.5 mt-2.5 pt-2.5 border-t text-[11px]">
                       <div className="flex items-center gap-1 font-bold text-navy">
                         <Star className="size-3 fill-gold text-gold" />
-                        <span>{(organizer.rating || 4.8).toFixed(1)}</span>
+                        <span>{formatRating(organizer.rating, 4.8)}</span>
                       </div>
                       <span className="text-muted-foreground">·</span>
                       <span className="text-muted-foreground">

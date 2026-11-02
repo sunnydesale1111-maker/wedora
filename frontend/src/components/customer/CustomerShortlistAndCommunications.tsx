@@ -24,6 +24,7 @@ import { Vendor } from '@/types/vendor';
 import { isOrganizerCategory } from '@/types/shortlist';
 import { VendorProfileModal } from '@/components/vendors/VendorProfileModal';
 import { RequestQuotationModal } from '@/components/bookings/RequestQuotationModal';
+import { formatRating } from '@/utils/formatters';
 
 interface CustomerShortlistAndCommunicationsProps {
   activeEvent: WeddingEvent;
@@ -216,7 +217,7 @@ export const CustomerShortlistAndCommunications: React.FC<CustomerShortlistAndCo
 
                       <div className="flex items-center gap-3 mt-3 text-xs">
                         <span className="font-bold text-navy flex items-center gap-1">
-                          <Star className="size-3.5 fill-gold text-gold" /> {(vendor.rating || 4.7).toFixed(1)}
+                          <Star className="size-3.5 fill-gold text-gold" /> {formatRating(vendor.rating, 4.8)}
                         </span>
                         <span className="text-muted-foreground">·</span>
                         <span className="text-muted-foreground">{vendor.completedOrders || 25}+ orders</span>
@@ -306,7 +307,7 @@ export const CustomerShortlistAndCommunications: React.FC<CustomerShortlistAndCo
 
                       <div className="flex items-center gap-3 mt-3 text-xs">
                         <span className="font-bold text-navy flex items-center gap-1">
-                          <Star className="size-3.5 fill-gold text-gold" /> {(organizer.rating || 4.8).toFixed(1)}
+                          <Star className="size-3.5 fill-gold text-gold" /> {formatRating(organizer.rating, 4.8)}
                         </span>
                         <span className="text-muted-foreground">·</span>
                         <span className="text-muted-foreground">{organizer.completedOrders || 30}+ weddings</span>

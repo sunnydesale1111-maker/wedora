@@ -16,10 +16,12 @@ import {
   MessageSquare,
   AlertCircle,
   Quote,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Status } from '@/components/dashboard';
 import { getVendorAreaMetrics } from '@/utils/vendorFilters';
+import { formatRating } from '@/utils/formatters';
 
 interface VendorProfileModalProps {
   vendor: Vendor | null;
@@ -127,6 +129,15 @@ export function VendorProfileModal({
                     <span className="flex items-center gap-1 font-medium text-navy">
                       <Users className="size-3.5 text-gold shrink-0" />
                       Up to {vendor.maximumGuestCapacity} Guests
+                    </span>
+                  </>
+                )}
+                {vendor.rating && (
+                  <>
+                    <span className="text-muted">·</span>
+                    <span className="flex items-center gap-1 font-semibold text-navy">
+                      <Star className="size-3.5 fill-gold text-gold" />
+                      {formatRating(vendor.rating, 4.8)}
                     </span>
                   </>
                 )}

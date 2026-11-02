@@ -299,8 +299,10 @@ export function parsePlannerVoiceCommand(
     activeArea?: string;
     activeEventDate?: string;
     activeEventName?: string;
+    role?: 'PLANNER' | 'CUSTOMER';
   }
 ): ParsedPlannerCommand {
+  const isCustomer = context?.role === 'CUSTOMER';
   const lang = detectLanguage(rawInput);
   const normalizedInput = convertSpokenNumberWords(rawInput);
   const lower = normalizedInput.toLowerCase();
@@ -321,8 +323,13 @@ export function parsePlannerVoiceCommand(
     lower.includes('कैलेंडर') ||
     lower.includes('availability calendar')
   ) {
-    const speech =
-      lang === 'mr'
+    const speech = isCustomer
+      ? lang === 'mr'
+        ? 'कार्यक्रमाच्या तारखांचे कॅलेंडर खाली उपलब्ध आहे.'
+        : lang === 'hi'
+        ? 'कार्यक्रम की तारीखों का कैलेंडर नीचे उपलब्ध है।'
+        : 'Here is the availability calendar for your event dates.'
+      : lang === 'mr'
         ? 'कॅलेंडर टॅब उघडला आहे. आपण तारीख आणि स्लॉट तपासू शकता.'
         : lang === 'hi'
         ? 'कैलेंडर टैब खोल दिया गया है। आप तारीख और स्लॉट उपलब्धता देख सकते हैं।'
@@ -351,8 +358,13 @@ export function parsePlannerVoiceCommand(
     lower.includes('फोरकास्ट') ||
     lower.includes('कामगिरी')
   ) {
-    const speech =
-      lang === 'mr'
+    const speech = isCustomer
+      ? lang === 'mr'
+        ? 'कार्यक्रमाच्या नियोजनाची प्रगती खाली अद्यतनित केली आहे.'
+        : lang === 'hi'
+        ? 'कार्यक्रम की योजना की प्रगति नीचे अपडेट कर दी गई है।'
+        : 'Your event planning progress has been updated.'
+      : lang === 'mr'
         ? 'इव्हेंट परफॉर्मन्स अंदाज खाली अद्यतनित केला आहे.'
         : lang === 'hi'
         ? 'इवेंट परफॉर्मेंस फोरकास्ट नीचे अपडेट कर दिया गया है।'
@@ -380,8 +392,13 @@ export function parsePlannerVoiceCommand(
     lower.includes('बदल') ||
     lower.includes('रिप्लेस')
   ) {
-    const speech =
-      lang === 'mr'
+    const speech = isCustomer
+      ? lang === 'mr'
+        ? 'खालील पर्यायांमधून तुम्ही दुसरा वेंडर निवडू शकता.'
+        : lang === 'hi'
+        ? 'नीचे दिए गए विकल्पों में से आप दूसरा वेंडर चुन सकते हैं।'
+        : 'You can choose a suitable replacement vendor from the options below.'
+      : lang === 'mr'
         ? `उपलब्ध पर्यायी वेंडरसह बदल करण्यासाठी कृपया खालील वेंडर कार्डवरील 'Swap Vendor' वर क्लिक करा.`
         : lang === 'hi'
         ? `वेंडर बदलने के लिए कृपया नीचे दिए गए वेंडर कार्ड पर 'Swap Vendor' पर क्लिक करके पुष्टि करें।`
@@ -409,15 +426,21 @@ export function parsePlannerVoiceCommand(
     lower.includes('खाली') ||
     lower.includes('फ्री')
   ) {
-    const dateFormatted = date || '15 December 2026';
-    const slotLabel = slot === 'FIRST_HALF' ? 'First Half' : slot === 'SECOND_HALF' ? 'Second Half' : 'requested slots';
-
-    const speech =
-      lang === 'mr'
-        ? `${dateFormatted} साठी वेंडर उपलब्धता तपासली आहे.`
+    const speech = isCustomer
+      ? lang === 'mr'
+        ? 'निवडलेल्या तारखेसाठी उपलब्ध असलेले वेंडर्स खाली दाखवले आहेत.'
         : lang === 'hi'
-        ? `${dateFormatted} के लिए वेंडर उपलब्धता जांच ली गई है।`
-        : `Checked vendor availability for ${dateFormatted} (${slotLabel}). Available vendors are highlighted below.`;
+        ? 'आपकी चुनी हुई तारीख के लिए उपलब्ध वेंडर्स नीचे दिखाए गए हैं।'
+        : 'Here are the vendors available for your selected date.'
+      : (() => {
+          const dateFormatted = date || '15 December 2026';
+          const slotLabel = slot === 'FIRST_HALF' ? 'First Half' : slot === 'SECOND_HALF' ? 'Second Half' : 'requested slots';
+          return lang === 'mr'
+            ? `${dateFormatted} साठी वेंडर उपलब्धता तपासली आहे.`
+            : lang === 'hi'
+            ? `${dateFormatted} के लिए वेंडर उपलब्धता जांच ली गई है।`
+            : `Checked vendor availability for ${dateFormatted} (${slotLabel}). Available vendors are highlighted below.`;
+        })();
 
     return {
       intent: 'CHECK_AVAILABILITY',
@@ -511,13 +534,20 @@ export function parsePlannerVoiceCommand(
     lower.includes('वैकल्पिक') ||
     lower.includes('दुसरे')
   ) {
-    const targetCat = category || 'Vendors';
-    const speech =
-      lang === 'mr'
-        ? `${speechLoc} मधील योग्य पर्यायी वेंडर्स खाली दाखवले आहेत.`
+    const speech = isCustomer
+      ? lang === 'mr'
+        ? 'तुमच्या गरजेनुसार काही पर्यायी वेंडर्स खाली दिले आहेत.'
         : lang === 'hi'
-        ? `${speechLoc} में उपयुक्त अनुशंसित वैकल्पिक वेंडर्स नीचे दिखाए गए हैं।`
-        : `Showing recommended alternative ${targetCat} in ${effectiveLocation}.`;
+        ? 'आपकी आवश्यकताओं के अनुसार कुछ वैकल्पिक वेंडर्स नीचे दिए गए हैं।'
+        : 'Here are some alternative vendor options matching your requirements.'
+      : (() => {
+          const targetCat = category || 'Vendors';
+          return lang === 'mr'
+            ? `${speechLoc} मधील योग्य पर्यायी वेंडर्स खाली दाखवले आहेत.`
+            : lang === 'hi'
+            ? `${speechLoc} में उपयुक्त अनुशंसित वैकल्पिक वेंडर्स नीचे दिखाए गए हैं।`
+            : `Showing recommended alternative ${targetCat} in ${effectiveLocation}.`;
+        })();
 
     return {
       intent: 'FIND_ALTERNATIVES',
@@ -535,12 +565,66 @@ export function parsePlannerVoiceCommand(
 
   // 7. DISCOVER VENDORS INTENT (Default for searching/showing vendors worked with or in an area)
   // e.g. "Can you show me the vendors we have previously worked with in Baner, Pune?"
-  const speech =
-    lang === 'mr'
-      ? `${speechLoc} मधील पूर्वी काम केलेले वेंडर्स आणि पर्यायी शिफारसी खाली दाखवल्या आहेत.`
-      : lang === 'hi'
-      ? `${speechLoc} में पूर्व सहयोग वाले वेंडर्स और अनुशंसित विकल्प नीचे प्रस्तुत हैं।`
-      : `Here are the vendors we have previously worked with in ${effectiveLocation}, along with recommended alternatives.`;
+  let speech = '';
+  if (isCustomer) {
+    if (category === 'Photography and Videography') {
+      speech =
+        lang === 'mr'
+          ? 'तुमच्या कार्यक्रमासाठी हे फोटोग्राफर्स खाली उपलब्ध आहेत. तुम्ही त्यांचे प्रोफाईल पाहू शकता.'
+          : lang === 'hi'
+          ? 'आपके कार्यक्रम के लिए ये फोटोग्राफर्स नीचे उपलब्ध हैं। आप उनकी प्रोफाइल देख सकते हैं।'
+          : 'I found these photographers for your event. You can explore their profiles below.';
+    } else if (category === 'Catering and Food Services') {
+      speech =
+        lang === 'mr'
+          ? 'तुमच्या कार्यक्रमासाठी हे कॅटरर्स खाली उपलब्ध आहेत. तुम्ही त्यांचे प्रोफाईल पाहू शकता.'
+          : lang === 'hi'
+          ? 'आपके कार्यक्रम के लिए ये कैटरर्स नीचे उपलब्ध हैं। आप उनकी प्रोफाइल देख सकते हैं।'
+          : 'I found these caterers for your event. You can explore their profiles below.';
+    } else if (category === 'Decoration Services' || category === 'Flower Arrangements') {
+      speech =
+        lang === 'mr'
+          ? 'तुमच्या कार्यक्रमासाठी हे सजावट वेंडर्स खाली उपलब्ध आहेत. तुम्ही त्यांचे प्रोफाईल पाहू शकता.'
+          : lang === 'hi'
+          ? 'आपके कार्यक्रम के लिए ये डेकोरेटर्स नीचे उपलब्ध हैं। आप उनकी प्रोफाइल देख सकते हैं।'
+          : 'I found these decorators for your event. You can explore their profiles below.';
+    } else if (category === 'Wedding Lawns and Venues') {
+      speech =
+        lang === 'mr'
+          ? 'तुमच्या कार्यक्रमासाठी हे वेन्यू आणि हॉल्स खाली उपलब्ध आहेत. तुम्ही त्यांचे प्रोफाईल पाहू शकता.'
+          : lang === 'hi'
+          ? 'आपके कार्यक्रम के लिए ये वेन्यू और हॉल नीचे उपलब्ध हैं। आप उनकी प्रोफाइल देख सकते हैं।'
+          : 'I found these banquet halls and venues for your event. You can explore their profiles below.';
+    } else if (category === 'DJ and Sound Systems') {
+      speech =
+        lang === 'mr'
+          ? 'तुमच्या कार्यक्रमासाठी हे डीजे आणि साऊंड वेंडर्स खाली उपलब्ध आहेत. तुम्ही त्यांचे प्रोफाईल पाहू शकता.'
+          : lang === 'hi'
+          ? 'आपके कार्यक्रम के लिए ये डीजे और साउंड वेंडर्स नीचे उपलब्ध हैं। आप उनकी प्रोफाइल देख सकते हैं।'
+          : 'I found these DJ and sound vendors for your event. You can explore their profiles below.';
+    } else if (category === 'Makeup and Mehendi Artists') {
+      speech =
+        lang === 'mr'
+          ? 'तुमच्या कार्यक्रमासाठी हे मेकअप आणि मेहंदी आर्टिस्ट्स खाली उपलब्ध आहेत. तुम्ही त्यांचे प्रोफाईल पाहू शकता.'
+          : lang === 'hi'
+          ? 'आपके कार्यक्रम के लिए ये मेकअप आर्टिस्ट्स नीचे उपलब्ध हैं। आप उनकी प्रोफाइल देख सकते हैं।'
+          : 'I found these makeup and styling artists for your event. You can explore their profiles below.';
+    } else {
+      speech =
+        lang === 'mr'
+          ? 'तुमच्या गरजेनुसार योग्य वेंडर्स खाली उपलब्ध आहेत.'
+          : lang === 'hi'
+          ? 'आपकी आवश्यकताओं के अनुसार वेंडर्स नीचे उपलब्ध हैं।'
+          : 'Here are some vendors that match your requirements.';
+    }
+  } else {
+    speech =
+      lang === 'mr'
+        ? `${speechLoc} मधील पूर्वी काम केलेले वेंडर्स आणि पर्यायी शिफारसी खाली दाखवल्या आहेत.`
+        : lang === 'hi'
+        ? `${speechLoc} में पूर्व सहयोग वाले वेंडर्स और अनुशंसित विकल्प नीचे प्रस्तुत हैं।`
+        : `Here are the vendors we have previously worked with in ${effectiveLocation}, along with recommended alternatives.`;
+  }
 
   return {
     intent: 'DISCOVER_VENDORS',
