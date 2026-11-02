@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CustomerRouteImport } from './routes/customer'
 import { Route as GetStartedRouteImport } from './routes/get-started'
 import { Route as PlannerRouteImport } from './routes/planner'
+import { Route as ProfessionalsRouteImport } from './routes/professionals'
 import { Route as VendorRouteImport } from './routes/vendor'
 
 const IndexRoute = IndexRouteImport.update({
@@ -35,6 +36,11 @@ const PlannerRoute = PlannerRouteImport.update({
   path: '/planner',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProfessionalsRoute = ProfessionalsRouteImport.update({
+  id: '/professionals',
+  path: '/professionals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VendorRoute = VendorRouteImport.update({
   id: '/vendor',
   path: '/vendor',
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/customer': typeof CustomerRoute
   '/get-started': typeof GetStartedRoute
   '/planner': typeof PlannerRoute
+  '/professionals': typeof ProfessionalsRoute
   '/vendor': typeof VendorRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/customer': typeof CustomerRoute
   '/get-started': typeof GetStartedRoute
   '/planner': typeof PlannerRoute
+  '/professionals': typeof ProfessionalsRoute
   '/vendor': typeof VendorRoute
 }
 export interface FileRoutesById {
@@ -61,14 +69,34 @@ export interface FileRoutesById {
   '/customer': typeof CustomerRoute
   '/get-started': typeof GetStartedRoute
   '/planner': typeof PlannerRoute
+  '/professionals': typeof ProfessionalsRoute
   '/vendor': typeof VendorRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/customer' | '/get-started' | '/planner' | '/vendor'
+  fullPaths:
+    | '/'
+    | '/customer'
+    | '/get-started'
+    | '/planner'
+    | '/professionals'
+    | '/vendor'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/customer' | '/get-started' | '/planner' | '/vendor'
-  id: '__root__' | '/' | '/customer' | '/get-started' | '/planner' | '/vendor'
+  to:
+    | '/'
+    | '/customer'
+    | '/get-started'
+    | '/planner'
+    | '/professionals'
+    | '/vendor'
+  id:
+    | '__root__'
+    | '/'
+    | '/customer'
+    | '/get-started'
+    | '/planner'
+    | '/professionals'
+    | '/vendor'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -76,6 +104,7 @@ export interface RootRouteChildren {
   CustomerRoute: typeof CustomerRoute
   GetStartedRoute: typeof GetStartedRoute
   PlannerRoute: typeof PlannerRoute
+  ProfessionalsRoute: typeof ProfessionalsRoute
   VendorRoute: typeof VendorRoute
 }
 
@@ -109,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlannerRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/professionals': {
+      id: '/professionals'
+      path: '/professionals'
+      fullPath: '/professionals'
+      preLoaderRoute: typeof ProfessionalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vendor': {
       id: '/vendor'
       path: '/vendor'
@@ -124,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomerRoute: CustomerRoute,
   GetStartedRoute: GetStartedRoute,
   PlannerRoute: PlannerRoute,
+  ProfessionalsRoute: ProfessionalsRoute,
   VendorRoute: VendorRoute,
 }
 export const routeTree = rootRouteImport

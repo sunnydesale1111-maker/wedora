@@ -16,3 +16,4 @@ export function formatRating(val?: number | null, fallback = 4.8): string {
   }
   return Number(val).toFixed(1);
 }
+

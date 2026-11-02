@@ -1,13 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import {
   ArrowRight,
   CalendarCheck,
   CreditCard,
   Search,
   Sparkles,
-  Store,
-  Users,
   Heart,
   CheckCircle2,
   MapPin,
@@ -133,43 +131,30 @@ const visualJourney = [
 function Landing() {
   const { city, changeCity } = useDemoSession();
   const [isCityModalOpen, setIsCityModalOpen] = useState(false);
-  const [isProDropdownOpen, setIsProDropdownOpen] = useState(false);
-  const proDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdown on click outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (proDropdownRef.current && !proDropdownRef.current.contains(event.target as Node)) {
-        setIsProDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   return (
     <div className="overflow-x-hidden bg-background">
       {/* Navigation */}
       <header className="relative z-10 mx-auto flex max-w-7xl items-center justify-between px-6 py-6">
         <Logo />
-        <nav className="hidden gap-8 text-sm text-muted-foreground md:flex items-center">
-          <a href="#features" className="hover:text-plum transition">Features</a>
-          <a href="#how" className="hover:text-plum transition">How it works</a>
-          <a href="#journey" className="hover:text-plum transition">Planning Journey</a>
-          <a href="#stories" className="hover:text-plum transition">Customer Stories</a>
+        <div className="flex items-center gap-4">
+          <nav className="hidden gap-8 text-sm text-muted-foreground md:flex items-center">
+            <a href="#features" className="hover:text-plum transition">Features</a>
+            <a href="#how" className="hover:text-plum transition">How it works</a>
+            <a href="#journey" className="hover:text-plum transition">Planning Journey</a>
+            <a href="#stories" className="hover:text-plum transition">Customer Stories</a>
+          </nav>
           {/* City Selector in Landing Header */}
           <button
             onClick={() => setIsCityModalOpen(true)}
             className="flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold-soft/70 px-3.5 py-1 text-xs font-semibold text-navy hover:bg-gold-soft transition"
+            aria-label="Select City"
           >
             <MapPin className="size-3.5 text-gold shrink-0" />
             <span>{city}</span>
             <ChevronDown className="size-3 text-muted-foreground" />
           </button>
-        </nav>
-        <Button asChild variant="hero">
-          <Link to="/get-started" search={{ role: "CUSTOMER" }}>Get Started</Link>
-        </Button>
+        </div>
       </header>
 
       {/* Hero */}
@@ -191,67 +176,17 @@ function Landing() {
           <div className="mt-8 flex flex-wrap items-center gap-4">
             <Button asChild variant="hero" size="xl">
               <Link to="/get-started" search={{ role: "CUSTOMER" }}>
-                Get Started <ArrowRight className="size-4 ml-1" />
+                <span>Plan an Event</span>
+                <ArrowRight className="size-4 ml-1" />
               </Link>
             </Button>
 
-            {/* Join as a Professional with Dual Popover */}
-            <div className="relative" ref={proDropdownRef}>
-              <Button
-                type="button"
-                variant="soft"
-                size="xl"
-                onClick={() => setIsProDropdownOpen(!isProDropdownOpen)}
-                className="flex items-center gap-2 border border-gold/40 hover:bg-gold-soft text-plum font-semibold"
-              >
+            <Button asChild variant="soft" size="xl" className="border border-gold/40 hover:bg-gold-soft text-plum font-semibold">
+              <Link to="/professionals">
                 <span>Join as a Professional</span>
-                <ChevronDown className={`size-4 text-gold transition-transform duration-200 ${isProDropdownOpen ? "rotate-180" : ""}`} />
-              </Button>
-
-              {isProDropdownOpen && (
-                <div className="absolute left-0 sm:left-auto sm:right-0 mt-2 w-72 rounded-2xl bg-card p-2 shadow-float border border-gold/40 z-30 animate-rise">
-                  <div className="px-3 py-2 border-b border-border text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Choose Your Professional Role
-                  </div>
-                  <Link
-                    to="/get-started"
-                    search={{ role: "VENDOR" }}
-                    onClick={() => setIsProDropdownOpen(false)}
-                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-gold-soft/50 transition text-left group"
-                  >
-                    <div className="p-2 rounded-lg bg-gold/15 text-gold shrink-0 group-hover:scale-105 transition">
-                      <Store className="size-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-plum group-hover:text-gold transition">
-                        I'm a Vendor
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        List services, manage calendar availability & quotations
-                      </div>
-                    </div>
-                  </Link>
-                  <Link
-                    to="/get-started"
-                    search={{ role: "PLANNER" }}
-                    onClick={() => setIsProDropdownOpen(false)}
-                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-gold-soft/50 transition text-left group"
-                  >
-                    <div className="p-2 rounded-lg bg-gold/15 text-gold shrink-0 group-hover:scale-105 transition">
-                      <Users className="size-4" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-plum group-hover:text-gold transition">
-                        I'm an Event Organizer
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        Manage client events, vendor contracts & timeline execution
-                      </div>
-                    </div>
-                  </Link>
-                </div>
-              )}
-            </div>
+                <ArrowRight className="size-4 ml-1" />
+              </Link>
+            </Button>
           </div>
 
           <div className="mt-10 flex gap-10 text-sm">
@@ -346,7 +281,8 @@ function Landing() {
           <div className="mt-12 text-center">
             <Button asChild variant="hero" size="xl">
               <Link to="/get-started" search={{ role: "CUSTOMER" }}>
-                Start Your Planning Journey <ArrowRight className="size-4 ml-1" />
+                <span>Plan an Event</span>
+                <ArrowRight className="size-4 ml-1" />
               </Link>
             </Button>
           </div>
@@ -431,7 +367,8 @@ function Landing() {
           <div className="mt-12 text-center">
             <Button asChild variant="hero" size="xl">
               <Link to="/get-started" search={{ role: "CUSTOMER" }}>
-                Plan Your Event Now <ArrowRight className="size-4 ml-1" />
+                <span>Plan an Event</span>
+                <ArrowRight className="size-4 ml-1" />
               </Link>
             </Button>
           </div>
