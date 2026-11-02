@@ -85,6 +85,7 @@ model User {
   aiConversations AIConversation[]
   familyProfiles CustomerFamilyProfile[] @relation("UserFamilyProfiles")
   clientProfiles OrganizerClientProfile[] @relation("OrganizerClientProfiles")
+  eventParticipations EventParticipant[] @relation("UserEventParticipations")
 
   @@map("users")
 }
@@ -192,6 +193,7 @@ model Event {
   organizerClientId String?      @map("organizer_client_id")
   organizerClient OrganizerClientProfile? @relation("ClientProfileEvents", fields: [organizerClientId], references: [id], onDelete: SetNull)
   profileAccess   CustomerProfileEventAccess[] @relation("EventProfileAccess")
+  participants    EventParticipant[]
   inquiries       Inquiry[]
   quotations      Quotation[]
   bookings        Booking[]
@@ -416,4 +418,30 @@ model OrganizerClientProfile {
 
   @@index([organizerUserId])
   @@map("organizer_client_profiles")
+}
+
+model EventParticipant {
+  id           String    @id @default(uuid())
+  eventId      String    @map("event_id")
+  userId       String?   @map("user_id")
+  name         String
+  email        String?
+  phone        String?
+  role         String    @default("FAMILY_MEMBER") // PRIMARY, CO_HOST, FAMILY_MEMBER, GUEST
+  relationship String?   @default("Participant")
+  isPrimary    Boolean   @default(false) @map("is_primary")
+  status       String    @default("PENDING") // PENDING or ACCEPTED
+  canEdit      Boolean   @default(false) @map("can_edit")
+  invitedAt    DateTime  @default(now()) @map("invited_at")
+  acceptedAt   DateTime? @map("accepted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  event        Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user         User?     @relation("UserEventParticipations", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([email])
+  @@map("event_participants")
 }

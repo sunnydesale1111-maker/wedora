@@ -88,6 +88,10 @@ function PlannerPortal() {
     updateOrganizerClient,
     archiveOrganizerClient,
     createClientEvent,
+    // Event Profile Sharing & Participant Management
+    inviteEventParticipant,
+    removeEventParticipant,
+    acceptEventInvitation,
   } = useDemoSession();
 
   // Payment modal state
@@ -696,7 +700,7 @@ function PlannerPortal() {
       <ClientEventDetailModal
         isOpen={Boolean(selectedDetailEvent)}
         onClose={() => setSelectedDetailEvent(null)}
-        event={selectedDetailEvent}
+        event={events.find((e) => e.id === selectedDetailEvent?.id) || selectedDetailEvent}
         tasks={timelineTasks}
         bookings={bookings}
         quotations={quotations}
@@ -711,6 +715,9 @@ function PlannerPortal() {
           setActiveEventId(eventId);
           setTab("discovery");
         }}
+        onInviteParticipant={(eventId, data) => inviteEventParticipant(eventId, data)}
+        onRemoveParticipant={(eventId, participantId) => removeEventParticipant(eventId, participantId)}
+        onAcceptInvitation={(eventId, participantId) => acceptEventInvitation(eventId, participantId)}
       />
     </DashboardShell>
   );

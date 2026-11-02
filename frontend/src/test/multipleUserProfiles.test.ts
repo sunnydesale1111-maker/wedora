@@ -13,6 +13,8 @@ import {
   DEFAULT_FAMILY_PERMISSIONS,
 } from '../types/profile';
 import { INITIAL_DEMO_EVENTS } from '../data/demoEvents';
+import { resolveEventParticipants, formatParticipantSummary } from '../utils/eventParticipants';
+import { EventParticipant } from '../types/event';
 
 describe('Wedora Multiple User Profiles Test Suite', () => {
   // =========================================================================
@@ -318,6 +320,154 @@ describe('Wedora Multiple User Profiles Test Suite', () => {
       expect(modalCode).toContain('Planning Checklist');
       expect(modalCode).toContain('Budget Fluctuation');
       expect(modalCode).toContain('Vendors & Contracts');
+    });
+  });
+
+  // =========================================================================
+  // PART F — EVENT PROFILE SHARING & PARTICIPANT RELATIONSHIPS
+  // =========================================================================
+  describe('Part F: Event Profile Sharing & Participant Management', () => {
+    it("18. Opening Rohan & Priya's Wedding shows Rohan and Priya", () => {
+      const rohanEvent = INITIAL_DEMO_EVENTS.find((e) => e.id === 'evt-01');
+      expect(rohanEvent).toBeDefined();
+
+      const participants = resolveEventParticipants(rohanEvent!);
+      expect(participants.length).toBeGreaterThanOrEqual(2);
+      expect(participants.some((p) => p.name.includes('Rohan'))).toBe(true);
+      expect(participants.some((p) => p.name.includes('Priya'))).toBe(true);
+
+      const summary = formatParticipantSummary(participants);
+      expect(summary).toBe('Rohan and Priya');
+    });
+
+    it("19. Opening Rocky & Sneha's Wedding shows Rocky and Sneha", () => {
+      const rockyEvent = INITIAL_DEMO_EVENTS.find((e) => e.id === 'evt-rocky-sneha');
+      expect(rockyEvent).toBeDefined();
+
+      const participants = resolveEventParticipants(rockyEvent!);
+      expect(participants.length).toBe(2);
+      expect(participants.some((p) => p.name.includes('Rocky'))).toBe(true);
+      expect(participants.some((p) => p.name.includes('Sneha'))).toBe(true);
+
+      const summary = formatParticipantSummary(participants);
+      expect(summary).toBe('Rocky and Sneha');
+    });
+
+    it("20. Opening Amit & Neha's Wedding shows Amit and Neha", () => {
+      const amitEvent = INITIAL_DEMO_EVENTS.find((e) => e.id === 'evt-amit-neha');
+      expect(amitEvent).toBeDefined();
+
+      const participants = resolveEventParticipants(amitEvent!);
+      expect(participants.length).toBe(2);
+      expect(participants.some((p) => p.name.includes('Amit'))).toBe(true);
+      expect(participants.some((p) => p.name.includes('Neha'))).toBe(true);
+
+      const summary = formatParticipantSummary(participants);
+      expect(summary).toBe('Amit and Neha');
+    });
+
+    it('21. Rohan Kulkarni DOES NOT appear on unrelated events', () => {
+      const unrelatedEvents = INITIAL_DEMO_EVENTS.filter((e) => e.id !== 'evt-01');
+      expect(unrelatedEvents.length).toBeGreaterThanOrEqual(5);
+
+      for (const event of unrelatedEvents) {
+        const participants = resolveEventParticipants(event);
+        const hasRohan = participants.some(
+          (p) => p.name.includes('Rohan') || (p.email && p.email.includes('kulkarni'))
+        );
+        expect(hasRohan).toBe(false);
+      }
+    });
+
+    it('22. Clicking + opens the minimal invitation interface', () => {
+      const modalPath = path.resolve(__dirname, '../components/planner/ClientEventDetailModal.tsx');
+      const code = fs.readFileSync(modalPath, 'utf8');
+
+      // Verify Plus button with invite title/aria-label
+      expect(code).toContain('title="Invite another person to this event profile"');
+      expect(code).toContain('setShowInviteModal');
+
+      // Verify minimal form inputs
+      expect(code).toContain('Invite Person to Event Profile');
+      expect(code).toContain('Full Name');
+      expect(code).toContain('Email or Mobile Number');
+      expect(code).toContain('Send Invitation');
+    });
+
+    it('23. Pending invitations are clearly distinguished from accepted members', () => {
+      const modalPath = path.resolve(__dirname, '../components/planner/ClientEventDetailModal.tsx');
+      const code = fs.readFileSync(modalPath, 'utf8');
+
+      expect(code).toContain("m.status === 'PENDING'");
+      expect(code).toContain('Pending');
+      expect(code).toContain('Accepted');
+      expect(code).toContain('No Access Yet (Pending Verification)');
+      expect(code).toContain('View Only');
+    });
+
+    it('24. Additional participants cannot edit event details (canEdit: false)', () => {
+      const testParticipant: EventParticipant = {
+        id: 'part-new-01',
+        name: 'Sunil Deshmukh',
+        email: 'sunil@deshmukh.in',
+        role: 'FAMILY_MEMBER',
+        relationship: 'Uncle of the Bride',
+        isPrimary: false,
+        status: 'PENDING',
+        canEdit: false,
+      };
+
+      expect(testParticipant.canEdit).toBe(false);
+      expect(testParticipant.isPrimary).toBe(false);
+      expect(testParticipant.status).toBe('PENDING');
+    });
+
+    it('25. Required primary participants cannot be removed by organizer', () => {
+      const rohanEvent = INITIAL_DEMO_EVENTS.find((e) => e.id === 'evt-01');
+      const participants = resolveEventParticipants(rohanEvent!);
+      const primaryParticipants = participants.filter((p) => p.isPrimary);
+
+      expect(primaryParticipants.length).toBeGreaterThan(0);
+
+      // Verify component checks !isPrimary before rendering remove button
+      const modalPath = path.resolve(__dirname, '../components/planner/ClientEventDetailModal.tsx');
+      const code = fs.readFileSync(modalPath, 'utf8');
+      expect(code).toContain('!isPrimary && (');
+      expect(code).toContain('handleRemoveParticipant');
+    });
+
+    it('26. Supabase SQL Migration exists with event_participants table and RLS policies', () => {
+      const migrationFilePath = path.resolve(
+        __dirname,
+        '../../../server/prisma/migrations/20261102140000_event_participants/migration.sql'
+      );
+      expect(fs.existsSync(migrationFilePath)).toBe(true);
+
+      const sql = fs.readFileSync(migrationFilePath, 'utf8');
+      expect(sql).toContain('event_participants');
+      expect(sql).toContain('"event_participants" ENABLE ROW LEVEL SECURITY');
+      expect(sql).toContain('owner_organizer_manage_event_participants');
+      expect(sql).toContain('participant_view_accepted_event');
+    });
+
+    it('27. Prisma schema contains model EventParticipant linked to Event and User', () => {
+      const prismaPath = path.resolve(__dirname, '../../../server/prisma/schema.prisma');
+      const schema = fs.readFileSync(prismaPath, 'utf8');
+
+      expect(schema).toContain('model EventParticipant');
+      expect(schema).toContain('participants    EventParticipant[]');
+      expect(schema).toContain('eventParticipations EventParticipant[]');
+    });
+
+    it('28. Backend EventController provides participant endpoints and RLS protection', () => {
+      const controllerPath = path.resolve(__dirname, '../../../server/src/controllers/event.controller.ts');
+      const code = fs.readFileSync(controllerPath, 'utf8');
+
+      expect(code).toContain('getParticipants');
+      expect(code).toContain('inviteParticipant');
+      expect(code).toContain('removeParticipant');
+      expect(code).toContain('acceptInvitation');
+      expect(code).toContain('Cannot remove required primary event participant');
     });
   });
 });

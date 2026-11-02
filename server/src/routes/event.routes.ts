@@ -11,4 +11,10 @@ router.get('/', EventController.getEvents);
 router.get('/:id', EventController.getEventById);
 router.patch('/:id', EventController.updateEvent);
 
+// Event Profile Sharing & Participant Management
+router.get('/:id/participants', EventController.getParticipants);
+router.post('/:id/participants/invite', EventController.inviteParticipant);
+router.delete('/:id/participants/:participantId', EventController.removeParticipant);
+router.post('/:id/participants/:participantId/accept', EventController.acceptInvitation);
+
 export default router;

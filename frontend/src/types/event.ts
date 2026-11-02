@@ -1,5 +1,20 @@
 import { City } from './vendor';
 
+export interface EventParticipant {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  role: 'PRIMARY' | 'CO_HOST' | 'FAMILY_MEMBER' | 'GUEST';
+  relationship?: string; // e.g. "Primary Client", "Bride", "Groom", "Family Member"
+  avatar?: string;
+  isPrimary?: boolean; // Required primary participant (cannot be removed by organizer)
+  status: 'ACCEPTED' | 'PENDING';
+  invitedAt?: string;
+  acceptedAt?: string;
+  canEdit?: boolean; // false = view-only for invited
+}
+
 export interface WeddingEvent {
   id: string;
   eventName: string;
@@ -22,6 +37,7 @@ export interface WeddingEvent {
   ownerRole: 'PLANNER' | 'CUSTOMER';
   ownerName: string;
   createdAt: string;
+  participants?: EventParticipant[];
 }
 
 export interface TimelineTask {

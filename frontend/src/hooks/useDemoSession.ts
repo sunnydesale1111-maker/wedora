@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { City, AvailabilityStatus, Vendor } from '../types/vendor';
-import { WeddingEvent, TimelineTask } from '../types/event';
+import { WeddingEvent, TimelineTask, EventParticipant } from '../types/event';
+import { resolveEventParticipants } from '../utils/eventParticipants';
 import { Inquiry, Quotation, Booking, SimulatedPayment } from '../types/booking';
 import { ShortlistItem } from '../types/shortlist';
 import {
@@ -559,6 +560,88 @@ export function useDemoSession() {
     [setActiveEventId, session, activeCustomerProfile]
   );
 
+  // Event Profile Sharing & Participant Management
+  const inviteEventParticipant = useCallback(
+    (eventId: string, data: { name: string; contact: string }) => {
+      const isEmail = data.contact.includes('@');
+      const newParticipant: EventParticipant = {
+        id: `part-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        name: data.name.trim(),
+        email: isEmail ? data.contact.trim() : undefined,
+        phone: !isEmail ? data.contact.trim() : undefined,
+        role: 'FAMILY_MEMBER',
+        relationship: 'Invited Member',
+        isPrimary: false,
+        status: 'PENDING',
+        canEdit: false,
+        invitedAt: new Date().toISOString(),
+      };
+
+      setEvents((prev) => {
+        const next = prev.map((evt) => {
+          if (evt.id === eventId) {
+            const current = evt.participants || resolveEventParticipants(evt);
+            return {
+              ...evt,
+              participants: [...current, newParticipant],
+            };
+          }
+          return evt;
+        });
+        saveStored(STORAGE_KEYS.EVENTS, next);
+        return next;
+      });
+
+      return newParticipant;
+    },
+    []
+  );
+
+  const removeEventParticipant = useCallback(
+    (eventId: string, participantId: string) => {
+      setEvents((prev) => {
+        const next = prev.map((evt) => {
+          if (evt.id === eventId) {
+            const current = evt.participants || resolveEventParticipants(evt);
+            // Protect required primary participants
+            return {
+              ...evt,
+              participants: current.filter((p) => p.id !== participantId || p.isPrimary),
+            };
+          }
+          return evt;
+        });
+        saveStored(STORAGE_KEYS.EVENTS, next);
+        return next;
+      });
+    },
+    []
+  );
+
+  const acceptEventInvitation = useCallback(
+    (eventId: string, participantId: string) => {
+      setEvents((prev) => {
+        const next = prev.map((evt) => {
+          if (evt.id === eventId) {
+            const current = evt.participants || resolveEventParticipants(evt);
+            return {
+              ...evt,
+              participants: current.map((p) =>
+                p.id === participantId
+                  ? { ...p, status: 'ACCEPTED' as const, acceptedAt: new Date().toISOString() }
+                  : p
+              ),
+            };
+          }
+          return evt;
+        });
+        saveStored(STORAGE_KEYS.EVENTS, next);
+        return next;
+      });
+    },
+    []
+  );
+
   // Role Login helpers
   const loginAsRole = useCallback(
     (
@@ -1004,5 +1087,10 @@ export function useDemoSession() {
     archiveOrganizerClient,
     setActiveClientId,
     createClientEvent,
+
+    // Event Profile Sharing & Participant Management
+    inviteEventParticipant,
+    removeEventParticipant,
+    acceptEventInvitation,
   };
 }

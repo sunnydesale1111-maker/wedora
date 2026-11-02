@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Calendar,
   Building2,
@@ -18,11 +18,13 @@ import {
   X,
   ShieldCheck,
   FileText,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { WeddingEvent, TimelineTask } from '@/types/event';
+import { WeddingEvent, TimelineTask, EventParticipant } from '@/types/event';
 import { Booking, Quotation } from '@/types/booking';
 import { CustomerProfile } from '@/types/profile';
+import { resolveEventParticipants, formatParticipantSummary } from '@/utils/eventParticipants';
 
 interface ClientEventDetailModalProps {
   isOpen: boolean;
@@ -31,11 +33,14 @@ interface ClientEventDetailModalProps {
   tasks: TimelineTask[];
   bookings: Booking[];
   quotations: Quotation[];
-  sharedProfiles: CustomerProfile[];
+  sharedProfiles?: CustomerProfile[];
   onToggleTask: (taskId: string) => void;
   onAddTask?: (taskName: string, category?: string, deadline?: string) => void;
   onPayBooking?: (booking: Booking) => void;
   onNavigateToDiscovery?: (eventId: string) => void;
+  onInviteParticipant?: (eventId: string, data: { name: string; contact: string }) => void;
+  onRemoveParticipant?: (eventId: string, participantId: string) => void;
+  onAcceptInvitation?: (eventId: string, participantId: string) => void;
 }
 
 export function ClientEventDetailModal({
@@ -50,11 +55,29 @@ export function ClientEventDetailModal({
   onAddTask,
   onPayBooking,
   onNavigateToDiscovery,
+  onInviteParticipant,
+  onRemoveParticipant,
+  onAcceptInvitation,
 }: ClientEventDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'checklist' | 'budget' | 'vendors'>('overview');
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskCategory, setNewTaskCategory] = useState('General Planning');
   const [newTaskDeadline, setNewTaskDeadline] = useState(event?.eventDate || '2026-12-15');
+
+  // Event Profile Sharing & Participant State
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteName, setInviteName] = useState('');
+  const [inviteContact, setInviteContact] = useState('');
+  const [localParticipants, setLocalParticipants] = useState<EventParticipant[]>([]);
+
+  useEffect(() => {
+    if (event) {
+      setLocalParticipants(event.participants || resolveEventParticipants(event));
+      setShowInviteModal(false);
+      setInviteName('');
+      setInviteContact('');
+    }
+  }, [event]);
 
   if (!isOpen || !event) return null;
 
@@ -75,10 +98,60 @@ export function ClientEventDetailModal({
   const remainingBudget = Math.max(0, currentBudget - confirmedSpending);
   const spendingRatio = currentBudget > 0 ? Math.min(100, Math.round((confirmedSpending / currentBudget) * 100)) : 0;
 
-  // Shared family members for this event
-  const eventSharedMembers = sharedProfiles.filter(
-    (p) => p.sharedEventIds?.includes(event.id) || p.role === 'PRIMARY'
-  );
+  // Participant summary text
+  const participantSummaryText = formatParticipantSummary(localParticipants);
+
+  const handleSendInvite = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteName.trim() || !inviteContact.trim() || !event) return;
+
+    if (onInviteParticipant) {
+      onInviteParticipant(event.id, { name: inviteName, contact: inviteContact });
+    }
+
+    const isEmail = inviteContact.includes('@');
+    const newParticipant: EventParticipant = {
+      id: `part-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      name: inviteName.trim(),
+      email: isEmail ? inviteContact.trim() : undefined,
+      phone: !isEmail ? inviteContact.trim() : undefined,
+      role: 'FAMILY_MEMBER',
+      relationship: 'Invited Member',
+      isPrimary: false,
+      status: 'PENDING',
+      canEdit: false,
+      invitedAt: new Date().toISOString(),
+    };
+
+    setLocalParticipants((prev) => [...prev, newParticipant]);
+    setInviteName('');
+    setInviteContact('');
+    setShowInviteModal(false);
+  };
+
+  const handleRemoveParticipant = (participantId: string) => {
+    if (!event) return;
+    if (onRemoveParticipant) {
+      onRemoveParticipant(event.id, participantId);
+    }
+    setLocalParticipants((prev) =>
+      prev.filter((p) => p.id !== participantId || p.isPrimary)
+    );
+  };
+
+  const handleAcceptInvite = (participantId: string) => {
+    if (!event) return;
+    if (onAcceptInvitation) {
+      onAcceptInvitation(event.id, participantId);
+    }
+    setLocalParticipants((prev) =>
+      prev.map((p) =>
+        p.id === participantId
+          ? { ...p, status: 'ACCEPTED' as const, acceptedAt: new Date().toISOString() }
+          : p
+      )
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -215,46 +288,190 @@ export function ClientEventDetailModal({
                 </div>
               </div>
 
-              {/* Members with Whom Event is Shared */}
-              <div className="p-4 rounded-2xl border border-gold/30 bg-gold-soft/20 space-y-2.5">
+              {/* Shared With Section */}
+              <div className="p-4 rounded-2xl border border-gold/30 bg-gold-soft/20 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-navy flex items-center gap-1.5">
-                    <Users className="size-4 text-gold" />
-                    Members with Whom Event is Shared ({eventSharedMembers.length})
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    Role-Based Event Access
-                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-navy flex items-center gap-1.5">
+                      <Users className="size-4 text-gold" />
+                      Shared With ({localParticipants.length})
+                    </span>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Shared With: <strong className="text-navy">{participantSummaryText}</strong>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowInviteModal((v) => !v)}
+                      className="size-7 rounded-full bg-gold hover:bg-gold-light text-navy font-bold flex items-center justify-center transition shadow-2xs cursor-pointer text-sm"
+                      title="Invite another person to this event profile"
+                      aria-label="Invite Person"
+                    >
+                      <Plus className="size-4" />
+                    </button>
+                    <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                      Event Access
+                    </span>
+                  </div>
                 </div>
-                {eventSharedMembers.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {eventSharedMembers.map((m) => (
-                      <div
-                        key={m.id}
-                        className="flex items-center gap-2 p-2 rounded-xl bg-card border border-border/50 text-xs"
+
+                {/* Minimal Invitation Interface */}
+                {showInviteModal && (
+                  <form
+                    onSubmit={handleSendInvite}
+                    className="p-3 bg-card rounded-xl border border-gold/50 shadow-sm space-y-2.5 animate-fadeIn"
+                  >
+                    <div className="flex items-center justify-between pb-1 border-b border-border/50">
+                      <span className="text-[11px] font-bold text-plum flex items-center gap-1">
+                        <UserPlus className="size-3.5 text-gold" />
+                        Invite Person to Event Profile
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowInviteModal(false)}
+                        className="text-muted-foreground hover:text-navy cursor-pointer"
+                        aria-label="Close invite form"
                       >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-navy mb-0.5">
+                          Full Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Ramesh Deshmukh"
+                          value={inviteName}
+                          onChange={(e) => setInviteName(e.target.value)}
+                          className="w-full rounded-lg border bg-background px-2.5 py-1.5 text-xs text-navy outline-none focus:border-gold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-navy mb-0.5">
+                          Email or Mobile Number <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="ramesh@gmail.com or +91 98200 12345"
+                          value={inviteContact}
+                          onChange={(e) => setInviteContact(e.target.value)}
+                          className="w-full rounded-lg border bg-background px-2.5 py-1.5 text-xs text-navy outline-none focus:border-gold"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                      <span className="text-[10px] text-muted-foreground italic">
+                        * Additional people receive view-only access after invitation is accepted and verified.
+                      </span>
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowInviteModal(false)}
+                          className="h-7 text-xs px-2.5 cursor-pointer"
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          type="submit"
+                          variant="hero"
+                          size="sm"
+                          className="h-7 text-xs px-3 font-semibold cursor-pointer"
+                        >
+                          Send Invitation
+                        </Button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+
+                {/* Participant Avatars & Cards */}
+                {localParticipants.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {localParticipants.map((m) => {
+                      const isPending = m.status === 'PENDING';
+                      const isPrimary = Boolean(m.isPrimary || m.role === 'PRIMARY');
+                      return (
                         <div
-                          className={`size-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
-                            m.role === 'PRIMARY'
-                              ? 'bg-gold-soft text-navy border border-gold/40'
-                              : 'bg-plum/10 text-plum'
+                          key={m.id}
+                          className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border text-xs transition ${
+                            isPending
+                              ? 'bg-amber-50/70 border-amber-300/70'
+                              : 'bg-card border-border/60'
                           }`}
                         >
-                          {m.name[0]?.toUpperCase()}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className={`size-7 rounded-full flex items-center justify-center font-bold text-xs shrink-0 ${
+                                isPrimary
+                                  ? 'bg-gold-soft text-navy border border-gold/40'
+                                  : isPending
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                  : 'bg-plum/10 text-plum'
+                              }`}
+                            >
+                              {m.name[0]?.toUpperCase()}
+                            </div>
+                            <div className="truncate">
+                              <p className="font-semibold text-navy truncate flex items-center gap-1.5">
+                                {m.name}
+                                {isPending && (
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded-full border border-amber-300">
+                                    Pending
+                                  </span>
+                                )}
+                                {!isPending && (
+                                  <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded-full border border-emerald-300">
+                                    Accepted
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                {m.relationship || (isPrimary ? 'Primary Client' : 'Invited Member')} •{' '}
+                                {isPrimary ? 'Full Access' : isPending ? 'No Access Yet (Pending Verification)' : 'View Only'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons: Simulate Accept or Remove */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            {isPending && (
+                              <button
+                                type="button"
+                                onClick={() => handleAcceptInvite(m.id)}
+                                className="text-[10px] font-medium text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-1.5 py-0.5 rounded cursor-pointer transition"
+                                title="Simulate participant accepting invitation"
+                              >
+                                Accept
+                              </button>
+                            )}
+                            {!isPrimary && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveParticipant(m.id)}
+                                className="p-1 rounded-full text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                                title="Remove participant access"
+                                aria-label={`Remove ${m.name}`}
+                              >
+                                <X className="size-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div className="truncate">
-                          <p className="font-semibold text-navy truncate">{m.name}</p>
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {m.relationship || (m.role === 'PRIMARY' ? 'Primary Account Holder' : 'Family Member')} •{' '}
-                            {m.role === 'PRIMARY' ? 'Full Access' : 'View Only'}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground italic">
-                    Event is currently private to primary account holder {event.clientName}.
+                    Event is currently private to primary client {event.clientName}.
                   </p>
                 )}
               </div>
@@ -592,3 +809,4 @@ export function ClientEventDetailModal({
     </div>
   );
 }
+

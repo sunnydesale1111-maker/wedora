@@ -211,4 +211,154 @@ export class EventController {
       res.status(500).json({ success: false, error: err.message });
     }
   }
+
+  // --- Event Profile Sharing & Participant Management ---
+
+  public static async getParticipants(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { id } = req.params;
+      const event = await prisma.event.findUnique({
+        where: { id },
+        include: {
+          participants: {
+            orderBy: { createdAt: 'asc' },
+          },
+        },
+      });
+
+      if (!event) {
+        res.status(404).json({ success: false, error: 'Event not found' });
+        return;
+      }
+
+      res.json({ success: true, data: event.participants });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  public static async inviteParticipant(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { id } = req.params;
+      const { name, email, phone } = req.body;
+
+      if (!name || (!email && !phone)) {
+        res.status(400).json({ success: false, error: 'Name and email or phone are required' });
+        return;
+      }
+
+      const event = await prisma.event.findUnique({ where: { id } });
+      if (!event) {
+        res.status(404).json({ success: false, error: 'Event not found' });
+        return;
+      }
+
+      // Check authorization: Owner or Organizer
+      const isOwner = event.ownerUserId === req.user.id;
+      let isOrganizer = false;
+      if (event.organizerClientId) {
+        const client = await (prisma as any).organizerClientProfile.findUnique({
+          where: { id: event.organizerClientId },
+        });
+        isOrganizer = client?.organizerUserId === req.user.id;
+      }
+
+      if (!isOwner && !isOrganizer && req.user.role !== 'PLANNER') {
+        res.status(403).json({ success: false, error: 'Only event owners or organizers can invite participants' });
+        return;
+      }
+
+      const participant = await (prisma as any).eventParticipant.create({
+        data: {
+          eventId: id,
+          name: name.trim(),
+          email: email ? email.trim().toLowerCase() : null,
+          phone: phone ? phone.trim() : null,
+          role: 'FAMILY_MEMBER',
+          relationship: 'Invited Member',
+          isPrimary: false,
+          status: 'PENDING',
+          canEdit: false,
+        },
+      });
+
+      res.status(201).json({ success: true, data: participant });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  public static async removeParticipant(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { id, participantId } = req.params;
+      const participant = await (prisma as any).eventParticipant.findUnique({
+        where: { id: participantId },
+      });
+
+      if (!participant || participant.eventId !== id) {
+        res.status(404).json({ success: false, error: 'Participant not found on this event' });
+        return;
+      }
+
+      if (participant.isPrimary) {
+        res.status(400).json({ success: false, error: 'Cannot remove required primary event participant' });
+        return;
+      }
+
+      await (prisma as any).eventParticipant.delete({
+        where: { id: participantId },
+      });
+
+      res.json({ success: true, message: 'Participant removed successfully' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  public static async acceptInvitation(req: AuthRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+
+      const { id, participantId } = req.params;
+      const participant = await (prisma as any).eventParticipant.findUnique({
+        where: { id: participantId },
+      });
+
+      if (!participant || participant.eventId !== id) {
+        res.status(404).json({ success: false, error: 'Participant not found' });
+        return;
+      }
+
+      const updated = await (prisma as any).eventParticipant.update({
+        where: { id: participantId },
+        data: {
+          status: 'ACCEPTED',
+          userId: req.user.id,
+          acceptedAt: new Date(),
+        },
+      });
+
+      res.json({ success: true, data: updated });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
 }
